@@ -1,1 +1,0 @@
-https://fit-ai-shine.lovable.app
