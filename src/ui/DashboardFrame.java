@@ -9,21 +9,11 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Path2D;
-import java.util.List;
 
 public class DashboardFrame extends JFrame {
     private final User user;
     private DashboardData data;
-<<<<<<< HEAD
-    private final CardLayout mainCardLayout = new CardLayout();
-    private JPanel mainCardPanel;
-    private StudentProgressPanel progressPanel;
-=======
     private String currentView = "Dashboard";
-    private JPanel mainContentPanel;
->>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
 
     public DashboardFrame(User user, DashboardData data) {
         this.user = user;
@@ -44,7 +34,6 @@ public class DashboardFrame extends JFrame {
 
         RoundedPanel shell = new RoundedPanel(34, new Color(255, 253, 246), new Color(0, 0, 0, 26), 10, 12);
         shell.setLayout(new BorderLayout());
-
         shell.add(buildSidebar(), BorderLayout.WEST);
         shell.add(buildMainPanel(), BorderLayout.CENTER);
 
@@ -62,7 +51,6 @@ public class DashboardFrame extends JFrame {
         JPanel brandRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         brandRow.setOpaque(false);
         brandRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 56));
-
         brandRow.add(new BrandIcon());
 
         JLabel brandLabel = new JLabel("EduRanker");
@@ -71,27 +59,15 @@ public class DashboardFrame extends JFrame {
 
         sidebar.add(brandRow);
         sidebar.add(Box.createVerticalStrut(36));
-<<<<<<< HEAD
-        sidebar.add(buildMenuItem("Dashboard", true, null));
+        sidebar.add(buildMenuItemButton("Dashboard", "Dashboard".equals(currentView)));
         sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItem("Progress / Projects", false, this::openStudentProgress));
+        sidebar.add(buildMenuItemButton("Progress / Projects", "Progress / Projects".equals(currentView)));
         sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItem("Reports", false, null));
+        sidebar.add(buildMenuItemButton("Reports", "Reports".equals(currentView)));
         sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItem("AI Mentor", false, null));
+        sidebar.add(buildMenuItemButton("AI Mentor", "AI Mentor".equals(currentView)));
         sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItem("Settings", false, null));
-=======
-        sidebar.add(buildMenuItemButton("Dashboard", true));
-        sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItemButton("Progress / Projects", false));
-        sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItemButton("Reports", false));
-        sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItemButton("AI Mentor", false));
-        sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItemButton("Settings", false));
->>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
+        sidebar.add(buildMenuItemButton("Settings", "Settings".equals(currentView)));
         sidebar.add(Box.createVerticalGlue());
         sidebar.add(buildRefreshButton());
 
@@ -102,38 +78,6 @@ public class DashboardFrame extends JFrame {
         return wrapper;
     }
 
-    private JComponent buildMenuItem(String label, boolean active, Runnable action) {
-        RoundedPanel panel = new RoundedPanel(18,
-                active ? new Color(255, 250, 235) : new Color(255, 0, 0, 0),
-                new Color(0, 0, 0, active ? 18 : 0), 0, 0);
-        panel.setLayout(new BorderLayout());
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 62));
-        panel.setPreferredSize(new Dimension(210, 62));
-
-        JLabel item = new JLabel(label);
-        item.setBorder(new EmptyBorder(0, 18, 0, 12));
-        item.setFont(new Font("SansSerif", active ? Font.BOLD : Font.PLAIN, 18));
-        item.setForeground(new Color(26, 26, 26));
-        panel.add(item, BorderLayout.CENTER);
-
-        if (action != null) {
-            panel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            panel.addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    action.run();
-                }
-            });
-        }
-        return panel;
-    }
-
-<<<<<<< HEAD
-    private void openStudentProgress() {
-        if (mainCardPanel != null) {
-            mainCardLayout.show(mainCardPanel, "progress");
-        }
-=======
     private JComponent buildMenuItemButton(String label, boolean active) {
         RoundedPanel panel = new RoundedPanel(18,
                 active ? new Color(255, 250, 235) : new Color(255, 0, 0, 0),
@@ -141,25 +85,22 @@ public class DashboardFrame extends JFrame {
         panel.setLayout(new BorderLayout());
         panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 62));
         panel.setPreferredSize(new Dimension(210, 62));
+        panel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
         JLabel item = new JLabel(label);
         item.setBorder(new EmptyBorder(0, 18, 0, 12));
         item.setFont(new Font("SansSerif", active ? Font.BOLD : Font.PLAIN, 18));
         item.setForeground(new Color(26, 26, 26));
-        item.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
         panel.add(item, BorderLayout.CENTER);
 
-        // Add click listener to switch views
-        panel.addMouseListener(new java.awt.event.MouseAdapter() {
+        panel.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
+            public void mouseClicked(MouseEvent event) {
                 switchView(label);
             }
         });
 
         return panel;
->>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
     }
 
     private JComponent buildRefreshButton() {
@@ -175,265 +116,54 @@ public class DashboardFrame extends JFrame {
     }
 
     private JComponent buildMainPanel() {
-        mainCardPanel = new JPanel(mainCardLayout);
-        mainCardPanel.setOpaque(false);
-        mainCardPanel.add(buildDashboardContent(), "dashboard");
-        mainCardPanel.add(buildProgressCard(), "progress");
-        return mainCardPanel;
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setOpaque(false);
+        panel.add(buildCurrentView(), BorderLayout.CENTER);
+        return panel;
     }
 
-    private JComponent buildDashboardContent() {
-        JPanel main = new JPanel(new BorderLayout());
-        main.setOpaque(false);
-        main.setBorder(new EmptyBorder(28, 26, 28, 28));
-
-        if (currentView.equals("Reports")) {
-            main.add(new StudentReportPanel(), BorderLayout.CENTER);
-        } else if (currentView.equals("Dashboard")) {
-            // Modern Dashboard view with charts and tables
-            main.add(new ModernDashboardPanel(data, user), BorderLayout.CENTER);
-        } else {
-            // Default Dashboard view
-            JPanel content = new JPanel(new GridBagLayout());
-            content.setOpaque(false);
-            GridBagConstraints gbc = new GridBagConstraints();
-            gbc.insets = new Insets(10, 10, 10, 10);
-            gbc.fill = GridBagConstraints.BOTH;
-            gbc.weightx = 1;
-            gbc.weighty = 0;
-
-            JLabel title = new JLabel(data.headline);
-            title.setFont(new Font("SansSerif", Font.BOLD, 34));
-            title.setBorder(new EmptyBorder(0, 8, 8, 0));
-            main.add(title, BorderLayout.NORTH);
-
-            gbc.gridx = 0;
-            gbc.gridy = 0;
-            gbc.weightx = 0.62;
-            content.add(buildGuideAndRankColumn(), gbc);
-
-            gbc.gridx = 1;
-            gbc.gridy = 0;
-            gbc.weightx = 0.38;
-            content.add(buildProfileColumn(), gbc);
-
-<<<<<<< HEAD
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        gbc.weightx = 0.62;
-        content.add(buildDashboardProgressCard(), gbc);
-=======
-            gbc.gridx = 0;
-            gbc.gridy = 1;
-            gbc.weightx = 0.62;
-            content.add(buildProgressCard(), gbc);
->>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
-
-            gbc.gridx = 1;
-            gbc.gridy = 1;
-            gbc.weightx = 0.38;
-            content.add(buildMonthlyChartCard(), gbc);
-
-            main.add(content, BorderLayout.CENTER);
+    private JComponent buildCurrentView() {
+        if ("Progress / Projects".equals(currentView)) {
+            return wrapMainContent(new StudentProgressPanel(user, () -> switchView("Dashboard")));
         }
-
-        return main;
+        if ("Reports".equals(currentView)) {
+            return wrapMainContent(new StudentReportPanel());
+        }
+        if ("AI Mentor".equals(currentView)) {
+            return wrapMainContent(buildPlaceholderView("AI Mentor", "AI mentor tools are next in line. Use the dashboard insights and reports while this section is being connected."));
+        }
+        if ("Settings".equals(currentView)) {
+            return wrapMainContent(buildPlaceholderView("Settings", "Profile and app settings will appear here once the next dashboard settings flow is added."));
+        }
+        return wrapMainContent(new ModernDashboardPanel(data, user));
     }
 
-    private JComponent buildDashboardProgressCard() {
-        RoundedPanel card = new RoundedPanel(28, new Color(255, 255, 255), new Color(0, 0, 0, 16), 0, 0);
-        card.setLayout(new BorderLayout());
-        card.setBorder(new EmptyBorder(24, 24, 24, 24));
-
-        JLabel title = new JLabel("Progress Summary");
-        title.setFont(new Font("SansSerif", Font.BOLD, 22));
-        title.setBorder(new EmptyBorder(0, 0, 16, 0));
-
-        JTextArea summary = new JTextArea("Open the Progress / Projects tab to review submitted work, upload new items, and refresh status without leaving the dashboard.");
-        summary.setLineWrap(true);
-        summary.setWrapStyleWord(true);
-        summary.setEditable(false);
-        summary.setOpaque(false);
-        summary.setFont(new Font("SansSerif", Font.PLAIN, 15));
-        summary.setForeground(new Color(75, 75, 75));
-
-        card.add(title, BorderLayout.NORTH);
-        card.add(summary, BorderLayout.CENTER);
-        return card;
+    private JComponent wrapMainContent(JComponent content) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setOpaque(false);
+        panel.setBorder(new EmptyBorder(28, 26, 28, 28));
+        panel.add(content, BorderLayout.CENTER);
+        return panel;
     }
 
-    private JComponent buildProgressCard() {
-        progressPanel = new StudentProgressPanel(user, () -> mainCardLayout.show(mainCardPanel, "dashboard"));
-        JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.setOpaque(false);
-        wrapper.setBorder(new EmptyBorder(28, 26, 28, 28));
-        wrapper.add(progressPanel, BorderLayout.CENTER);
-        return wrapper;
-    }
-
-    private JComponent buildGuideAndRankColumn() {
-        JPanel column = new JPanel();
-        column.setOpaque(false);
-        column.setLayout(new BoxLayout(column, BoxLayout.Y_AXIS));
-
-        JPanel guideRow = new JPanel(new GridLayout(1, 2, 18, 0));
-        guideRow.setOpaque(false);
-        guideRow.add(buildGuideCard(data.primaryGuideTitle, data.primaryGuideText));
-        guideRow.add(buildGuideCard(data.secondaryGuideTitle, data.secondaryGuideText));
-
-        column.add(guideRow);
-        column.add(Box.createVerticalStrut(18));
-        column.add(buildRankCard());
-        return column;
-    }
-
-    private JComponent buildGuideCard(String title, String body) {
-        RoundedPanel card = new RoundedPanel(28, new Color(252, 248, 227), new Color(0, 0, 0, 12), 0, 0);
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(new EmptyBorder(22, 24, 22, 24));
-
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 20));
-        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JTextArea bodyLabel = new JTextArea(body);
-        bodyLabel.setEditable(false);
-        bodyLabel.setOpaque(false);
-        bodyLabel.setWrapStyleWord(true);
-        bodyLabel.setLineWrap(true);
-        bodyLabel.setFocusable(false);
-        bodyLabel.setFont(new Font("SansSerif", Font.PLAIN, 16));
-        bodyLabel.setForeground(new Color(55, 55, 55));
-        bodyLabel.setBorder(new EmptyBorder(14, 0, 0, 0));
-        bodyLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        card.add(titleLabel);
-        card.add(bodyLabel);
-        return card;
-    }
-
-    private JComponent buildRankCard() {
+    private JComponent buildPlaceholderView(String titleText, String message) {
         RoundedPanel card = new RoundedPanel(28, new Color(255, 255, 255), new Color(0, 0, 0, 14), 0, 0);
-        card.setBorder(new EmptyBorder(24, 26, 20, 26));
-        card.setLayout(new BorderLayout());
+        card.setLayout(new BorderLayout(0, 18));
+        card.setBorder(new EmptyBorder(28, 28, 28, 28));
 
-        JLabel title = new JLabel("Rank");
-        title.setFont(new Font("SansSerif", Font.BOLD, 28));
+        JLabel title = new JLabel(titleText);
+        title.setFont(new Font("SansSerif", Font.BOLD, 30));
+
+        JTextArea body = new JTextArea(message);
+        body.setEditable(false);
+        body.setOpaque(false);
+        body.setLineWrap(true);
+        body.setWrapStyleWord(true);
+        body.setFont(new Font("SansSerif", Font.PLAIN, 16));
+        body.setForeground(new Color(75, 75, 75));
+
         card.add(title, BorderLayout.NORTH);
-
-        JPanel content = new JPanel(new BorderLayout());
-        content.setOpaque(false);
-        content.setBorder(new EmptyBorder(18, 0, 0, 0));
-
-        JLabel rankValue = new JLabel(String.valueOf(data.rank));
-        rankValue.setFont(new Font("SansSerif", Font.BOLD, 96));
-
-        JLabel outOf = new JLabel("out of " + data.totalStudents);
-        outOf.setFont(new Font("SansSerif", Font.PLAIN, 24));
-        outOf.setForeground(new Color(104, 104, 104));
-        outOf.setHorizontalAlignment(SwingConstants.RIGHT);
-
-        content.add(rankValue, BorderLayout.WEST);
-        content.add(outOf, BorderLayout.SOUTH);
-        card.add(content, BorderLayout.CENTER);
-        return card;
-    }
-
-    private JComponent buildProfileColumn() {
-        RoundedPanel card = new RoundedPanel(28, new Color(252, 248, 227), new Color(0, 0, 0, 12), 0, 0);
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(new EmptyBorder(24, 24, 24, 24));
-
-        JPanel header = new JPanel(new BorderLayout());
-        header.setOpaque(false);
-
-        JPanel identity = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 0));
-        identity.setOpaque(false);
-        identity.add(new AvatarPanel(data.studentName));
-
-        JPanel names = new JPanel();
-        names.setOpaque(false);
-        names.setLayout(new BoxLayout(names, BoxLayout.Y_AXIS));
-
-        JLabel nameLabel = new JLabel(data.studentName);
-        nameLabel.setFont(new Font("SansSerif", Font.BOLD, 24));
-
-        JLabel classLabel = new JLabel(data.className);
-        classLabel.setFont(new Font("SansSerif", Font.PLAIN, 16));
-        classLabel.setForeground(new Color(75, 75, 75));
-
-        names.add(Box.createVerticalStrut(6));
-        names.add(nameLabel);
-        names.add(Box.createVerticalStrut(8));
-        names.add(classLabel);
-
-        identity.add(names);
-
-        JLabel currentRank = new JLabel("<html>Current<br>Rank</html>");
-        currentRank.setFont(new Font("SansSerif", Font.BOLD, 22));
-        currentRank.setForeground(new Color(28, 28, 28));
-
-        header.add(identity, BorderLayout.WEST);
-        header.add(currentRank, BorderLayout.EAST);
-
-        JSeparator separator = new JSeparator();
-        separator.setForeground(new Color(232, 223, 190));
-        separator.setBackground(new Color(232, 223, 190));
-
-        JPanel stats = new JPanel();
-        stats.setOpaque(false);
-        stats.setLayout(new BoxLayout(stats, BoxLayout.Y_AXIS));
-
-        JLabel rankLabel = new JLabel("Current Rank");
-        rankLabel.setFont(new Font("SansSerif", Font.PLAIN, 17));
-
-        JPanel line = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        line.setOpaque(false);
-        JLabel rankNumber = new JLabel(String.valueOf(data.rank));
-        rankNumber.setFont(new Font("SansSerif", Font.BOLD, 56));
-        JLabel percentile = new JLabel("percentile " + data.percentile + "th");
-        percentile.setFont(new Font("SansSerif", Font.PLAIN, 18));
-        percentile.setForeground(new Color(64, 64, 64));
-        line.add(rankNumber);
-        line.add(percentile);
-
-        stats.add(rankLabel);
-        stats.add(Box.createVerticalStrut(12));
-        stats.add(line);
-
-        card.add(header);
-        card.add(Box.createVerticalStrut(24));
-        card.add(separator);
-        card.add(Box.createVerticalStrut(24));
-        card.add(stats);
-        card.add(Box.createVerticalGlue());
-
-        return card;
-    }
-
-    private JComponent buildProgressRow(String label, int value) {
-        JPanel row = new JPanel(new BorderLayout(18, 0));
-        row.setOpaque(false);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
-
-        JLabel nameLabel = new JLabel(label);
-        nameLabel.setPreferredSize(new Dimension(160, 32));
-        nameLabel.setFont(new Font("SansSerif", Font.PLAIN, 18));
-
-        row.add(nameLabel, BorderLayout.WEST);
-        row.add(new ProgressBarPanel(value), BorderLayout.CENTER);
-        return row;
-    }
-
-    private JComponent buildMonthlyChartCard() {
-        RoundedPanel card = new RoundedPanel(28, new Color(255, 255, 255), new Color(0, 0, 0, 14), 0, 0);
-        card.setLayout(new BorderLayout());
-        card.setBorder(new EmptyBorder(22, 24, 20, 24));
-
-        JLabel title = new JLabel("Progress This Month");
-        title.setFont(new Font("SansSerif", Font.PLAIN, 21));
-        card.add(title, BorderLayout.NORTH);
-        card.add(new MonthlyChartPanel(data.monthlyProgress), BorderLayout.CENTER);
+        card.add(body, BorderLayout.CENTER);
         return card;
     }
 
@@ -471,7 +201,7 @@ public class DashboardFrame extends JFrame {
     }
 
     private void switchView(String viewName) {
-        if (currentView.equals(viewName)) {
+        if (viewName.equals(currentView)) {
             return;
         }
 
@@ -517,124 +247,6 @@ public class DashboardFrame extends JFrame {
             g2.drawLine(18, 25, 18, 10);
             g2.drawLine(18, 10, 11, 17);
             g2.drawLine(18, 10, 25, 17);
-            g2.dispose();
-        }
-    }
-
-    private static class AvatarPanel extends JComponent {
-        private final String initials;
-
-        private AvatarPanel(String name) {
-            this.initials = buildInitials(name);
-        }
-
-        @Override
-        public Dimension getPreferredSize() {
-            return new Dimension(82, 82);
-        }
-
-        @Override
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D g2 = (Graphics2D) graphics.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(new Color(248, 210, 79));
-            g2.fill(new Ellipse2D.Double(0, 0, 82, 82));
-            g2.setColor(new Color(34, 34, 34));
-            g2.setFont(new Font("SansSerif", Font.BOLD, 28));
-            FontMetrics metrics = g2.getFontMetrics();
-            int textWidth = metrics.stringWidth(initials);
-            int x = (82 - textWidth) / 2;
-            int y = 44 + (metrics.getAscent() / 2) - 4;
-            g2.drawString(initials, x, y);
-            g2.dispose();
-        }
-
-        private static String buildInitials(String name) {
-            if (name == null || name.isBlank()) {
-                return "S";
-            }
-            String[] parts = name.trim().split("\\s+");
-            if (parts.length == 1) {
-                return parts[0].substring(0, 1).toUpperCase();
-            }
-            return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
-        }
-    }
-
-    private static class ProgressBarPanel extends JComponent {
-        private final int progress;
-
-        private ProgressBarPanel(int progress) {
-            this.progress = Math.max(0, Math.min(100, progress));
-            setPreferredSize(new Dimension(320, 18));
-        }
-
-        @Override
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D g2 = (Graphics2D) graphics.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(new Color(243, 243, 243));
-            g2.fillRoundRect(0, 2, getWidth(), 12, 12, 12);
-            g2.setColor(new Color(251, 214, 69));
-            int width = (int) (getWidth() * (progress / 100.0));
-            g2.fillRoundRect(0, 2, width, 12, 12, 12);
-            g2.dispose();
-        }
-    }
-
-    private static class MonthlyChartPanel extends JComponent {
-        private final List<Integer> values;
-
-        private MonthlyChartPanel(List<Integer> values) {
-            this.values = values;
-            setPreferredSize(new Dimension(280, 180));
-        }
-
-        @Override
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D g2 = (Graphics2D) graphics.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-            int padding = 12;
-            int width = getWidth() - padding * 2;
-            int height = getHeight() - padding * 2 - 24;
-            int originY = padding + height;
-
-            g2.setColor(new Color(235, 235, 235));
-            g2.drawLine(padding, originY, padding + width, originY);
-
-            if (values == null || values.size() < 2) {
-                g2.dispose();
-                return;
-            }
-
-            int max = 0;
-            for (Integer value : values) {
-                if (value != null) {
-                    max = Math.max(max, value);
-                }
-            }
-            max = Math.max(max, 40);
-
-            Path2D path = new Path2D.Double();
-            for (int index = 0; index < values.size(); index++) {
-                double x = padding + (index * (width / (double) (values.size() - 1)));
-                double normalized = values.get(index) / (double) max;
-                double y = padding + (height - normalized * height);
-                if (index == 0) {
-                    path.moveTo(x, y);
-                } else {
-                    double previousX = padding + ((index - 1) * (width / (double) (values.size() - 1)));
-                    double controlX = (previousX + x) / 2;
-                    double previousNormalized = values.get(index - 1) / (double) max;
-                    double previousY = padding + (height - previousNormalized * height);
-                    path.curveTo(controlX, previousY, controlX, y, x, y);
-                }
-            }
-
-            g2.setColor(new Color(248, 206, 44));
-            g2.setStroke(new BasicStroke(3.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.draw(path);
             g2.dispose();
         }
     }

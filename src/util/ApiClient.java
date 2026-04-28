@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
  * Enhanced API Client for Supabase REST API
@@ -15,69 +16,42 @@ import java.nio.charset.StandardCharsets;
 public class ApiClient {
 
     public static String get(String endpoint) {
-        try {
-            URL url = new URL(Config.SUPABASE_URL + endpoint);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
-            conn.setRequestProperty("apikey", Config.API_KEY);
-            conn.setRequestProperty("Authorization", "Bearer " + Config.API_KEY);
-            conn.setRequestProperty("Accept", "application/json");
-
-            return handleResponse(conn);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
+        return send("GET", endpoint, null, null);
     }
 
-    public static String post(String endpoint, String jsonBody) {
+    public static String post(String endpoint, String body) {
+        return send("POST", endpoint, body, null);
+    }
+
+    public static String patch(String endpoint, String body) {
+        return send("PATCH", endpoint, body, null);
+    }
+
+    public static String send(String method, String endpoint, String body, Map<String, String> extraHeaders) {
         try {
             URL url = new URL(Config.SUPABASE_URL + endpoint);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
-            conn.setRequestMethod("POST");
+            conn.setRequestMethod(method);
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(10000);
             conn.setRequestProperty("apikey", Config.API_KEY);
             conn.setRequestProperty("Authorization", "Bearer " + Config.API_KEY);
-            conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json");
-            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json");
 
-            try (OutputStream os = conn.getOutputStream()) {
-                byte[] input = jsonBody.getBytes(StandardCharsets.UTF_8);
-                os.write(input, 0, input.length);
+            if (extraHeaders != null) {
+                for (Map.Entry<String, String> entry : extraHeaders.entrySet()) {
+                    conn.setRequestProperty(entry.getKey(), entry.getValue());
+                }
             }
 
-            return handleResponse(conn);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    public static String patch(String endpoint, String jsonBody) {
-        try {
-            URL url = new URL(Config.SUPABASE_URL + endpoint);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-
-            conn.setRequestMethod("PATCH");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
-            conn.setRequestProperty("apikey", Config.API_KEY);
-            conn.setRequestProperty("Authorization", "Bearer " + Config.API_KEY);
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Accept", "application/json");
-            conn.setDoOutput(true);
-
-            try (OutputStream os = conn.getOutputStream()) {
-                byte[] input = jsonBody.getBytes(StandardCharsets.UTF_8);
-                os.write(input, 0, input.length);
+            if (body != null) {
+                conn.setDoOutput(true);
+                byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+                try (OutputStream outputStream = conn.getOutputStream()) {
+                    outputStream.write(payload);
+                }
             }
 
             return handleResponse(conn);

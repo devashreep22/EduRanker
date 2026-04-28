@@ -141,7 +141,10 @@ public class LoginFrame extends JFrame {
                 if (user == null) {
                     return new Object[]{null, null};
                 }
-                DashboardData data = DashboardService.loadDashboard(user);
+                DashboardData data = null;
+                if (!isTeacher(user)) {
+                    data = DashboardService.loadDashboard(user);
+                }
                 return new Object[]{user, data};
             }
 
@@ -156,8 +159,7 @@ public class LoginFrame extends JFrame {
                         statusLabel.setText("Login failed. Check PRN, password, or table columns.");
                         return;
                     }
-                    DashboardFrame frame = new DashboardFrame(user, data);
-                    frame.setVisible(true);
+                    openDashboard(user, data);
                     dispose();
                 } catch (Exception exception) {
                     statusLabel.setText("Unable to load dashboard: " + exception.getMessage());
@@ -166,6 +168,20 @@ public class LoginFrame extends JFrame {
         };
 
         worker.execute();
+    }
+
+    private void openDashboard(User user, DashboardData data) {
+        JFrame frame;
+        if (isTeacher(user)) {
+            frame = new TeacherDashboardFrame(user.prn);
+        } else {
+            frame = new DashboardFrame(user, data);
+        }
+        frame.setVisible(true);
+    }
+
+    private boolean isTeacher(User user) {
+        return user != null && user.role != null && user.role.equalsIgnoreCase("teacher");
     }
 
     private static class RoundedPanel extends JPanel {

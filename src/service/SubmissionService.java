@@ -1,15 +1,11 @@
 package service;
 
-<<<<<<< HEAD
-import com.google.gson.Gson;
-=======
->>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-<<<<<<< HEAD
 import model.Submission;
+import util.ApiClient;
 import util.Config;
 
 import java.io.BufferedReader;
@@ -23,18 +19,15 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SubmissionService {
-    private static final Gson GSON = new Gson();
 
     public static List<Submission> fetchSubmissions(String userId) {
         try {
             String query = Config.SUPABASE_URL + "/rest/v1/submissions?select=*";
-            // Temporarily remove user_id filtering since column doesn't exist
-            // if (userId != null && !userId.isBlank()) {
-            //     query += "&user_id=eq." + URLEncoder.encode(userId, StandardCharsets.UTF_8);
-            // }
             URL url = new URL(query);
             HttpURLConnection conn = createConnection(url, "GET");
 
@@ -53,38 +46,34 @@ public class SubmissionService {
                 submission.type = readString(object, "type", "Unknown");
                 submission.file_url = readString(object, "file_url", "");
                 submission.status = readString(object, "status", "pending");
-                submission.user_id = readString(object, "user_id", ""); // Add this line
+                submission.user_id = readString(object, "user_id", "");
                 items.add(submission);
             }
             return items;
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception exception) {
+            exception.printStackTrace();
             return new ArrayList<>();
         }
     }
 
     public static boolean uploadSubmission(Submission submission, String userId, File file) {
         try {
-            // Temporarily don't set user_id since column doesn't exist
-            // if (userId != null && !userId.isBlank()) {
-            //     submission.user_id = userId;
-            // }
-            // Skip file upload for now since bucket doesn't exist
-            // if (file != null && file.exists()) {
-            //     String fileUrl = uploadFileToStorage(file, userId);
-            //     if (fileUrl == null) {
-            //         return false;
-            //     }
-            //     submission.file_url = fileUrl;
-            // }
+            if (file != null && file.exists()) {
+                String fileUrl = uploadFileToStorage(file, userId);
+                if (fileUrl == null) {
+                    return false;
+                }
+                submission.file_url = fileUrl;
+            }
 
-            // Create a copy without user_id for the payload
             JsonObject jsonObj = new JsonObject();
             jsonObj.addProperty("title", submission.title);
             jsonObj.addProperty("type", submission.type);
             jsonObj.addProperty("file_url", submission.file_url);
             jsonObj.addProperty("status", submission.status);
-            // jsonObj.addProperty("user_id", submission.user_id); // Skip for now
+            if (userId != null && !userId.isBlank()) {
+                jsonObj.addProperty("user_id", userId);
+            }
 
             URL url = new URL(Config.SUPABASE_URL + "/rest/v1/submissions");
             HttpURLConnection conn = createConnection(url, "POST");
@@ -104,10 +93,138 @@ public class SubmissionService {
             String error = readResponse(conn, status);
             System.err.println("Submission upload failed: " + status + " " + error);
             return false;
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception exception) {
+            exception.printStackTrace();
             return false;
         }
+    }
+
+    public static List<Map<String, String>> getSubmissions(String prn) {
+        List<Map<String, String>> submissions = new ArrayList<>();
+        String endpoint = "/rest/v1/submissions?select=*&student_prn=eq." + encode(prn) + "&order=created_at.desc";
+        String response = ApiClient.get(endpoint);
+
+        if (response == null || response.equals("[]")) {
+            return submissions;
+        }
+
+        try {
+            JsonArray array = JsonParser.parseString(response).getAsJsonArray();
+            for (JsonElement element : array) {
+                JsonObject obj = element.getAsJsonObject();
+                Map<String, String> submission = new HashMap<>();
+                submission.put("id", readString(obj, "id", ""));
+                submission.put("title", readString(obj, "title", ""));
+                submission.put("type", readString(obj, "type", ""));
+                submission.put("status", readString(obj, "status", ""));
+                submission.put("date", readString(obj, "created_at", ""));
+                submission.put("description", readString(obj, "description", ""));
+                submissions.add(submission);
+            }
+        } catch (Exception exception) {
+            exception.printStackTrace();
+        }
+
+        return submissions;
+    }
+
+    public static Map<String, Integer> getSubmissionStats(String prn) {
+        Map<String, Integer> stats = new HashMap<>();
+        stats.put("total", 0);
+        stats.put("approved", 0);
+        stats.put("pending", 0);
+        stats.put("rejected", 0);
+
+        List<Map<String, String>> submissions = getSubmissions(prn);
+        stats.put("total", submissions.size());
+
+        for (Map<String, String> submission : submissions) {
+            String status = submission.getOrDefault("status", "").toLowerCase();
+            switch (status) {
+                case "approved":
+                    stats.put("approved", stats.get("approved") + 1);
+                    break;
+                case "pending":
+                    stats.put("pending", stats.get("pending") + 1);
+                    break;
+                case "rejected":
+                    stats.put("rejected", stats.get("rejected") + 1);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return stats;
+    }
+
+    public static List<Map<String, String>> getAchievements(String prn) {
+        List<Map<String, String>> achievements = new ArrayList<>();
+        String endpoint = "/rest/v1/achievements?select=*&student_prn=eq." + encode(prn);
+        String response = ApiClient.get(endpoint);
+
+        if (response == null || response.equals("[]")) {
+            return achievements;
+        }
+
+        try {
+            JsonArray array = JsonParser.parseString(response).getAsJsonArray();
+            for (JsonElement element : array) {
+                JsonObject obj = element.getAsJsonObject();
+                Map<String, String> achievement = new HashMap<>();
+                achievement.put("id", readString(obj, "id", ""));
+                achievement.put("title", readString(obj, "title", ""));
+                achievement.put("category", readString(obj, "category", ""));
+                achievement.put("date", readString(obj, "achieved_date", ""));
+                achievement.put("certificate_url", readString(obj, "certificate_url", ""));
+                achievements.add(achievement);
+            }
+        } catch (Exception exception) {
+            exception.printStackTrace();
+        }
+
+        return achievements;
+    }
+
+    public static Map<String, Integer> getAchievementCounts(String prn) {
+        Map<String, Integer> counts = new HashMap<>();
+        counts.put("projects", 0);
+        counts.put("certificates", 0);
+        counts.put("workshops", 0);
+
+        List<Map<String, String>> achievements = getAchievements(prn);
+        for (Map<String, String> achievement : achievements) {
+            String category = achievement.getOrDefault("category", "").toLowerCase();
+            switch (category) {
+                case "project":
+                    counts.put("projects", counts.get("projects") + 1);
+                    break;
+                case "certificate":
+                    counts.put("certificates", counts.get("certificates") + 1);
+                    break;
+                case "workshop":
+                    counts.put("workshops", counts.get("workshops") + 1);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return counts;
+    }
+
+    public static String createSubmission(String prn, String title, String type, String description) {
+        String json = String.format(
+                "{\"student_prn\":\"%s\",\"title\":\"%s\",\"type\":\"%s\",\"status\":\"pending\",\"description\":\"%s\"}",
+                escapeJson(prn), escapeJson(title), escapeJson(type), escapeJson(description)
+        );
+        return ApiClient.post("/rest/v1/submissions", json);
+    }
+
+    public static String updateSubmissionStatus(String submissionId, String status) {
+        String json = String.format("{\"status\":\"%s\"}", escapeJson(status));
+        String endpoint = "/rest/v1/submissions?id=eq." + encode(submissionId);
+        return ApiClient.patch(endpoint, json);
     }
 
     private static String uploadFileToStorage(File file, String userId) {
@@ -140,8 +257,8 @@ public class SubmissionService {
             String error = readResponse(conn, status);
             System.err.println("Storage upload failed: " + status + " " + error);
             return null;
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception exception) {
+            exception.printStackTrace();
             return null;
         }
     }
@@ -176,190 +293,10 @@ public class SubmissionService {
                 response.append(line);
             }
             return response.toString();
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception exception) {
+            exception.printStackTrace();
             return null;
         }
-=======
-import util.ApiClient;
-
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-/**
- * SubmissionService - Handles all submission and achievement related API calls
- * Fetches data from the 'submissions' and 'achievements' tables
- */
-public class SubmissionService {
-
-    /**
-     * Get all submissions for a user
-     * @param prn Student PRN
-     * @return List of submissions
-     */
-    public static List<Map<String, String>> getSubmissions(String prn) {
-        List<Map<String, String>> submissions = new ArrayList<>();
-
-        String endpoint = "/rest/v1/submissions?select=*&student_prn=eq." + encode(prn) + "&order=created_at.desc";
-        String response = ApiClient.get(endpoint);
-
-        if (response == null || response.equals("[]")) {
-            return submissions;
-        }
-
-        try {
-            JsonArray array = JsonParser.parseString(response).getAsJsonArray();
-            for (JsonElement element : array) {
-                JsonObject obj = element.getAsJsonObject();
-                Map<String, String> submission = new HashMap<>();
-                
-                submission.put("id", readString(obj, "id", ""));
-                submission.put("title", readString(obj, "title", ""));
-                submission.put("type", readString(obj, "type", ""));
-                submission.put("status", readString(obj, "status", ""));
-                submission.put("date", readString(obj, "created_at", ""));
-                submission.put("description", readString(obj, "description", ""));
-                
-                submissions.add(submission);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return submissions;
-    }
-
-    /**
-     * Get submission statistics for a user
-     * @param prn Student PRN
-     * @return Map with counts of different statuses
-     */
-    public static Map<String, Integer> getSubmissionStats(String prn) {
-        Map<String, Integer> stats = new HashMap<>();
-        stats.put("total", 0);
-        stats.put("approved", 0);
-        stats.put("pending", 0);
-        stats.put("rejected", 0);
-
-        List<Map<String, String>> submissions = getSubmissions(prn);
-        stats.put("total", submissions.size());
-
-        for (Map<String, String> submission : submissions) {
-            String status = submission.get("status").toLowerCase();
-            switch (status) {
-                case "approved":
-                    stats.put("approved", stats.get("approved") + 1);
-                    break;
-                case "pending":
-                    stats.put("pending", stats.get("pending") + 1);
-                    break;
-                case "rejected":
-                    stats.put("rejected", stats.get("rejected") + 1);
-                    break;
-            }
-        }
-
-        return stats;
-    }
-
-    /**
-     * Get achievements for a user
-     * @param prn Student PRN
-     * @return List of achievements
-     */
-    public static List<Map<String, String>> getAchievements(String prn) {
-        List<Map<String, String>> achievements = new ArrayList<>();
-
-        String endpoint = "/rest/v1/achievements?select=*&student_prn=eq." + encode(prn);
-        String response = ApiClient.get(endpoint);
-
-        if (response == null || response.equals("[]")) {
-            return achievements;
-        }
-
-        try {
-            JsonArray array = JsonParser.parseString(response).getAsJsonArray();
-            for (JsonElement element : array) {
-                JsonObject obj = element.getAsJsonObject();
-                Map<String, String> achievement = new HashMap<>();
-                
-                achievement.put("id", readString(obj, "id", ""));
-                achievement.put("title", readString(obj, "title", ""));
-                achievement.put("category", readString(obj, "category", ""));
-                achievement.put("date", readString(obj, "achieved_date", ""));
-                achievement.put("certificate_url", readString(obj, "certificate_url", ""));
-                
-                achievements.add(achievement);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return achievements;
-    }
-
-    /**
-     * Get achievement summary counts
-     * @param prn Student PRN
-     * @return Map with project, certificate, and workshop counts
-     */
-    public static Map<String, Integer> getAchievementCounts(String prn) {
-        Map<String, Integer> counts = new HashMap<>();
-        counts.put("projects", 0);
-        counts.put("certificates", 0);
-        counts.put("workshops", 0);
-
-        List<Map<String, String>> achievements = getAchievements(prn);
-        
-        for (Map<String, String> achievement : achievements) {
-            String category = achievement.get("category").toLowerCase();
-            switch (category) {
-                case "project":
-                    counts.put("projects", counts.get("projects") + 1);
-                    break;
-                case "certificate":
-                    counts.put("certificates", counts.get("certificates") + 1);
-                    break;
-                case "workshop":
-                    counts.put("workshops", counts.get("workshops") + 1);
-                    break;
-            }
-        }
-
-        return counts;
-    }
-
-    /**
-     * Create a new submission
-     * @param prn Student PRN
-     * @param title Submission title
-     * @param type Submission type
-     * @param description Description
-     * @return Response from API
-     */
-    public static String createSubmission(String prn, String title, String type, String description) {
-        String json = String.format(
-                "{\"student_prn\":\"%s\",\"title\":\"%s\",\"type\":\"%s\",\"status\":\"pending\",\"description\":\"%s\"}",
-                prn, escapeJson(title), escapeJson(type), escapeJson(description)
-        );
-        return ApiClient.post("/rest/v1/submissions", json);
-    }
-
-    /**
-     * Update submission status
-     * @param submissionId Submission ID
-     * @param status New status
-     * @return Response from API
-     */
-    public static String updateSubmissionStatus(String submissionId, String status) {
-        String json = String.format("{\"status\":\"%s\"}", status);
-        String endpoint = "/rest/v1/submissions?id=eq." + encode(submissionId);
-        return ApiClient.patch(endpoint, json);
->>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
     }
 
     private static String readString(JsonObject object, String key, String fallback) {
@@ -370,16 +307,18 @@ public class SubmissionService {
         String value = element.getAsString();
         return value == null || value.isBlank() ? fallback : value;
     }
-<<<<<<< HEAD
-=======
 
     private static String encode(String value) {
         return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
     private static String escapeJson(String value) {
-        if (value == null) return "";
-        return value.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
     }
->>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
 }
