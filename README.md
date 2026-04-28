@@ -107,28 +107,26 @@ Students are ranked based on highest score.
 EduRanker/
 │
 ├── lib/
-│ └── gson-2.10.1.jar
+│   └── gson-2.10.1.jar
 │
 ├── src/
-│ ├── Main.java
-│ ├── TestApi.java
-│
-│ ├── util/
-│ │ ├── Config.java
-│ │ ├── ApiClient.java
-│
-│ ├── model/
-│ │ ├── User.java
-│
-│ ├── service/
-│ │ ├── AuthService.java
-│
-│ ├── ui/
-│ ├── LoginFrame.java
-│ ├── StudentDashboard.java
-│ ├── TeacherDashboard.java
-
-
+│   ├── Main.java
+│   ├── TestApi.java
+│   │
+│   ├── util/
+│   │   ├── Config.java
+│   │   └── ApiClient.java
+│   │
+│   ├── model/
+│   │   └── User.java
+│   │
+│   ├── service/
+│   │   └── AuthService.java
+│   │
+│   └── ui/
+│       ├── LoginFrame.java
+│       ├── StudentDashboard.java
+│       └── TeacherDashboard.java
 
 ---
 
