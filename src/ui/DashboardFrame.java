@@ -69,6 +69,8 @@ public class DashboardFrame extends JFrame {
         sidebar.add(Box.createVerticalStrut(14));
         sidebar.add(buildMenuItemButton("Settings", "Settings".equals(currentView)));
         sidebar.add(Box.createVerticalGlue());
+        sidebar.add(buildLogoutButton());
+        sidebar.add(Box.createVerticalStrut(10));
         sidebar.add(buildRefreshButton());
 
         JPanel wrapper = new JPanel(new BorderLayout());
@@ -112,6 +114,18 @@ public class DashboardFrame extends JFrame {
         button.setFont(new Font("SansSerif", Font.BOLD, 14));
         button.setAlignmentX(Component.LEFT_ALIGNMENT);
         button.addActionListener(event -> refreshDashboard(button));
+        return button;
+    }
+
+    private JComponent buildLogoutButton() {
+        JButton button = new JButton("Logout");
+        button.setFocusPainted(false);
+        button.setBackground(new Color(196, 82, 82));
+        button.setForeground(Color.WHITE);
+        button.setBorder(new EmptyBorder(12, 18, 12, 18));
+        button.setFont(new Font("SansSerif", Font.BOLD, 14));
+        button.setAlignmentX(Component.LEFT_ALIGNMENT);
+        button.addActionListener(event -> AppNavigator.openLoginWindow(this));
         return button;
     }
 

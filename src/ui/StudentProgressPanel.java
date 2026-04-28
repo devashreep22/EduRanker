@@ -281,7 +281,12 @@ public class StudentProgressPanel extends JPanel {
             return;
         }
 
-        String[] options = {"Project", "Certificate"};
+        String description = JOptionPane.showInputDialog(this, "Enter short description:", "Submission Description", JOptionPane.PLAIN_MESSAGE);
+        if (description == null) {
+            return;
+        }
+
+        String[] options = {"Project", "Certificate", "Workshop"};
         String type = (String) JOptionPane.showInputDialog(this, "Select type:", "Submission Type",
                 JOptionPane.PLAIN_MESSAGE, null, options, defaultType);
         if (type == null || type.isBlank()) {
@@ -289,6 +294,7 @@ public class StudentProgressPanel extends JPanel {
         }
 
         Submission submission = new Submission(title.trim(), type, "", "pending");
+        submission.description = description.trim();
         new UploadWorker(submission, selectedFile).execute();
     }
 
@@ -342,7 +348,7 @@ public class StudentProgressPanel extends JPanel {
         @Override
         protected List<Submission> doInBackground() {
             statusLabel.setText("Fetching submissions...");
-            return SubmissionService.fetchSubmissions(user == null ? null : user.id);
+            return SubmissionService.fetchSubmissions(user);
         }
 
         @Override
@@ -369,7 +375,7 @@ public class StudentProgressPanel extends JPanel {
         @Override
         protected Boolean doInBackground() {
             statusLabel.setText("Uploading submission...");
-            return SubmissionService.uploadSubmission(submission, user == null ? null : user.id, file);
+            return SubmissionService.uploadSubmission(submission, user, file);
         }
 
         @Override

@@ -5,18 +5,24 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import model.OperationResult;
+import model.Submission;
 import model.TeacherAssignmentRecord;
 import model.TeacherClassRecord;
 import model.TeacherDashboardData;
 import model.TeacherNoticeRecord;
 import model.TeacherStudentRecord;
+import model.TeacherSubmissionReviewRecord;
+import model.User;
 import util.ApiClient;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class TeacherDashboardService {
 
@@ -24,43 +30,23 @@ public class TeacherDashboardService {
         TeacherDashboardData data = new TeacherDashboardData();
 
         JsonObject teacher = fetchTeacher(preferredTeacherPrn);
-        if (teacher != null) {
-            data.teacherPrn = readString(teacher, "prn", "");
-            data.teacherName = readString(teacher, "name", data.teacherName);
-            data.department = readString(teacher, "department", "Computer Science");
-            data.profileLoaded = true;
-            data.anySupabaseDataLoaded = true;
-            data.sourceMessage = "Connected to Supabase";
+        if (teacher == null) {
+            data.sourceMessage = "Teacher profile not found in Supabase";
+            return data;
         }
 
-        List<TeacherClassRecord> classes = fetchClasses(data.teacherPrn);
-        if (!classes.isEmpty()) {
-            data.classRecords = classes;
-            data.anySupabaseDataLoaded = true;
-        }
+        data.teacherPrn = readString(teacher, "prn", "");
+        data.teacherName = readString(teacher, "name", "Teacher");
+        data.department = readString(teacher, "department", "Department");
+        data.profileLoaded = true;
+        data.sourceMessage = "Connected to Supabase";
 
-        List<TeacherStudentRecord> students = fetchStudents(data.classRecords);
-        if (!students.isEmpty()) {
-            data.studentRecords = students;
-            data.anySupabaseDataLoaded = true;
-        }
-
-        List<TeacherAssignmentRecord> assignments = fetchAssignments(data.teacherPrn);
-        if (!assignments.isEmpty()) {
-            data.assignmentRecords = assignments;
-            data.anySupabaseDataLoaded = true;
-        }
-
-        List<TeacherNoticeRecord> notices = fetchNotices(data.teacherPrn);
-        if (!notices.isEmpty()) {
-            data.noticeRecords = notices;
-            data.anySupabaseDataLoaded = true;
-        }
-
-        if (!data.anySupabaseDataLoaded) {
-            data.sourceMessage = "Supabase tables not found or empty, using sample data";
-        }
-
+        data.classRecords = fetchClasses(data.teacherPrn);
+        data.studentRecords = fetchStudents(data.classRecords);
+        data.assignmentRecords = fetchAssignments(data.teacherPrn);
+        data.noticeRecords = fetchNotices(data.teacherPrn);
+        data.reviewRecords = fetchReviewQueue(data.studentRecords);
+        data.anySupabaseDataLoaded = true;
         return data;
     }
 
@@ -82,10 +68,12 @@ public class TeacherDashboardService {
             payload.add(row);
         }
 
-        String response = ApiClient.post("/rest/v1/attendance_records", payload.toString());
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Prefer", "return=representation");
+        String response = ApiClient.send("POST", "/rest/v1/attendance_records", payload.toString(), headers);
         return isWriteSuccessful(response)
-                ? OperationResult.success("Attendance saved to Supabase")
-                : OperationResult.failure("Create table attendance_records to save attendance");
+                ? OperationResult.success("Attendance saved")
+                : OperationResult.failure("Could not save attendance. Check the attendance_records table.");
     }
 
     public static OperationResult saveMarks(String teacherPrn, String className, String subject, List<TeacherStudentRecord> students) {
@@ -107,10 +95,12 @@ public class TeacherDashboardService {
             payload.add(row);
         }
 
-        String response = ApiClient.post("/rest/v1/marks_records", payload.toString());
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Prefer", "return=representation");
+        String response = ApiClient.send("POST", "/rest/v1/marks_records", payload.toString(), headers);
         return isWriteSuccessful(response)
-                ? OperationResult.success("Marks saved to Supabase")
-                : OperationResult.failure("Create table marks_records to save marks");
+                ? OperationResult.success("Marks saved")
+                : OperationResult.failure("Could not save marks. Check the marks_records table.");
     }
 
     public static OperationResult postAssignment(String teacherPrn, String title, String description) {
@@ -124,10 +114,12 @@ public class TeacherDashboardService {
         row.addProperty("description", description);
         row.addProperty("due_date", LocalDate.now().plusDays(7).toString());
 
-        String response = ApiClient.post("/rest/v1/assignments", "[" + row + "]");
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Prefer", "return=representation");
+        String response = ApiClient.send("POST", "/rest/v1/assignments", row.toString(), headers);
         return isWriteSuccessful(response)
-                ? OperationResult.success("Assignment posted to Supabase")
-                : OperationResult.failure("Create table assignments to post assignments");
+                ? OperationResult.success("Assignment posted")
+                : OperationResult.failure("Could not post assignment. Check the assignments table.");
     }
 
     public static OperationResult postNotice(String teacherPrn, String text) {
@@ -140,10 +132,12 @@ public class TeacherDashboardService {
         row.addProperty("notice_text", text);
         row.addProperty("posted_on", LocalDate.now().toString());
 
-        String response = ApiClient.post("/rest/v1/notices", "[" + row + "]");
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Prefer", "return=representation");
+        String response = ApiClient.send("POST", "/rest/v1/notices", row.toString(), headers);
         return isWriteSuccessful(response)
-                ? OperationResult.success("Notice posted to Supabase")
-                : OperationResult.failure("Create table notices to post notices");
+                ? OperationResult.success("Notice posted")
+                : OperationResult.failure("Could not post notice. Check the notices table.");
     }
 
     public static OperationResult updatePassword(String teacherPrn, String newPassword, String confirmPassword) {
@@ -160,11 +154,37 @@ public class TeacherDashboardService {
         JsonObject payload = new JsonObject();
         payload.addProperty("password", newPassword);
 
-        String endpoint = "/rest/v1/users?prn=eq." + encode(teacherPrn);
-        String response = ApiClient.patch(endpoint, payload.toString());
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Prefer", "return=representation");
+        String response = ApiClient.send("PATCH",
+                "/rest/v1/users?prn=eq." + encode(teacherPrn),
+                payload.toString(),
+                headers);
         return isWriteSuccessful(response)
-                ? OperationResult.success("Password updated in Supabase")
-                : OperationResult.failure("Could not update password in users table");
+                ? OperationResult.success("Password updated")
+                : OperationResult.failure("Could not update password in Supabase");
+    }
+
+    public static OperationResult reviewSubmission(TeacherSubmissionReviewRecord review, boolean approve, int totalStudents) {
+        if (review == null || review.submissionId == null || review.submissionId.isBlank()) {
+            return OperationResult.failure("Select a submission first");
+        }
+
+        String response = SubmissionService.updateSubmissionStatus(review.submissionId, approve ? "approved" : "rejected");
+        if (!isWriteSuccessful(response)) {
+            return OperationResult.failure("Could not update submission status in Supabase");
+        }
+
+        if (approve) {
+            SubmissionService.syncAchievementForApprovedSubmission(review);
+        } else {
+            SubmissionService.removeAchievementForSubmission(review);
+        }
+        SubmissionService.refreshStudentMetrics(review.studentPrn, totalStudents);
+
+        return OperationResult.success(approve
+                ? "Submission approved and student dashboard updated"
+                : "Submission rejected and student dashboard updated");
     }
 
     private static JsonObject fetchTeacher(String preferredTeacherPrn) {
@@ -179,15 +199,9 @@ public class TeacherDashboardService {
         if (array.isEmpty()) {
             return null;
         }
-
-        JsonObject teacher = array.get(0).getAsJsonObject();
-        if (teacher.has("role") && !teacher.get("role").isJsonNull()) {
-            String role = teacher.get("role").getAsString();
-            if (!role.equalsIgnoreCase("teacher") && preferredTeacherPrn == null) {
-                return null;
-            }
-        }
-        return teacher;
+        JsonObject object = array.get(0).getAsJsonObject();
+        String role = readString(object, "role", "");
+        return role.equalsIgnoreCase("teacher") ? object : null;
     }
 
     private static List<TeacherClassRecord> fetchClasses(String teacherPrn) {
@@ -212,40 +226,24 @@ public class TeacherDashboardService {
 
     private static List<TeacherStudentRecord> fetchStudents(List<TeacherClassRecord> classes) {
         List<TeacherStudentRecord> records = new ArrayList<>();
-        JsonArray array = parseArray(ApiClient.get("/rest/v1/students?select=*"));
-        if (array.isEmpty()) {
-            array = parseArray(ApiClient.get("/rest/v1/users?select=prn,name,class_name,attendance_percentage,assignment_marks,exam_marks,role&role=eq.student"));
-        }
-
+        JsonArray array = parseArray(ApiClient.get("/rest/v1/users?select=prn,id,name,class_name,attendance_percentage,assignment_marks,exam_marks,role&role=eq.student"));
         for (JsonElement element : array) {
             JsonObject object = element.getAsJsonObject();
             TeacherStudentRecord record = new TeacherStudentRecord();
-            record.id = readString(object, "prn", readString(object, "student_id", ""));
+            record.id = readString(object, "prn", readString(object, "id", ""));
             record.name = readString(object, "name", "");
-            record.className = readString(object, "class_name", readString(object, "class", ""));
+            record.className = readString(object, "class_name", "");
             record.attendancePercentage = readInt(object, "attendance_percentage", 0);
             record.assignmentMarks = readInt(object, "assignment_marks", 0);
             record.examMarks = readInt(object, "exam_marks", 0);
             record.present = true;
 
-            if (record.id.isBlank()) {
-                continue;
-            }
             if (!classes.isEmpty() && !belongsToClasses(record.className, classes)) {
                 continue;
             }
             records.add(record);
         }
         return records;
-    }
-
-    private static boolean belongsToClasses(String className, List<TeacherClassRecord> classes) {
-        for (TeacherClassRecord record : classes) {
-            if (record.className != null && record.className.equalsIgnoreCase(className)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static List<TeacherAssignmentRecord> fetchAssignments(String teacherPrn) {
@@ -287,6 +285,65 @@ public class TeacherDashboardService {
         return records;
     }
 
+    private static List<TeacherSubmissionReviewRecord> fetchReviewQueue(List<TeacherStudentRecord> students) {
+        Map<String, User> usersByIdentifier = buildUserLookup(students);
+        List<Submission> submissions = SubmissionService.fetchAllSubmissions();
+        List<TeacherSubmissionReviewRecord> reviews = SubmissionService.buildReviewRecords(submissions, usersByIdentifier);
+        List<TeacherSubmissionReviewRecord> filtered = new ArrayList<>();
+        for (TeacherSubmissionReviewRecord review : reviews) {
+            if (review.type == null) {
+                continue;
+            }
+            String type = review.type.toLowerCase();
+            if (!type.equals("project") && !type.equals("certificate") && !type.equals("workshop")) {
+                continue;
+            }
+            filtered.add(review);
+        }
+        return filtered;
+    }
+
+    private static Map<String, User> buildUserLookup(List<TeacherStudentRecord> students) {
+        Map<String, User> lookup = new LinkedHashMap<>();
+        for (TeacherStudentRecord student : students) {
+            User user = new User();
+            user.prn = student.id;
+            user.id = student.id;
+            user.name = student.name;
+            user.className = student.className;
+            lookup.put(student.id, user);
+        }
+
+        JsonArray users = parseArray(ApiClient.get("/rest/v1/users?select=id,prn,name,class_name,role&role=eq.student"));
+        for (JsonElement element : users) {
+            JsonObject object = element.getAsJsonObject();
+            User user = new User();
+            user.id = readString(object, "id", "");
+            user.prn = readString(object, "prn", "");
+            user.name = readString(object, "name", "");
+            user.className = readString(object, "class_name", "");
+            if (!user.id.isBlank()) {
+                lookup.put(user.id, user);
+            }
+            if (!user.prn.isBlank()) {
+                lookup.put(user.prn, user);
+            }
+        }
+        return lookup;
+    }
+
+    private static boolean belongsToClasses(String className, List<TeacherClassRecord> classes) {
+        if (className == null || className.isBlank()) {
+            return false;
+        }
+        for (TeacherClassRecord record : classes) {
+            if (className.equalsIgnoreCase(record.className)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static JsonArray parseArray(String response) {
         if (response == null || response.isBlank()) {
             return new JsonArray();
@@ -309,8 +366,7 @@ public class TeacherDashboardService {
                 return true;
             }
             if (element.isJsonObject()) {
-                JsonObject object = element.getAsJsonObject();
-                return !object.has("code");
+                return !element.getAsJsonObject().has("code");
             }
         } catch (Exception ignored) {
             return false;

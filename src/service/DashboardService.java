@@ -10,54 +10,122 @@ import util.ApiClient;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class DashboardService {
 
     public static DashboardData loadDashboard(User user) {
         DashboardData data = new DashboardData();
-
         if (user == null) {
             return data;
         }
 
-        if (user.name != null && !user.name.isBlank()) {
-            data.studentName = user.name;
-        }
-        if (user.className != null && !user.className.isBlank()) {
-            data.className = user.className;
-        }
+        data.studentName = fallback(user.name, data.studentName);
+        data.className = fallback(user.className, data.className);
 
-        String endpoint = "/rest/v1/users?select=*&prn=eq." + encode(user.prn);
-        String response = ApiClient.get(endpoint);
-
-        if (response == null || response.isBlank() || "[]".equals(response)) {
-            return data;
-        }
-
-        JsonArray array = JsonParser.parseString(response).getAsJsonArray();
-        if (array.isEmpty()) {
-            return data;
+        JsonObject profile = fetchUserProfile(user.prn);
+        if (profile != null) {
+            data.studentName = readString(profile, "name", data.studentName);
+            data.className = readString(profile, "class_name", data.className);
+            data.headline = readString(profile, "headline", "Track your verified progress");
+            data.primaryGuideTitle = readString(profile, "primary_guide_title", "Approved projects");
+            data.primaryGuideText = readString(profile, "primary_guide_text", "Projects and certificates move here after teacher approval.");
+            data.secondaryGuideTitle = readString(profile, "secondary_guide_title", "Next step");
+            data.secondaryGuideText = readString(profile, "secondary_guide_text", "Upload your latest work and wait for faculty review.");
+            data.totalStudents = readInt(profile, "total_students", data.totalStudents);
         }
 
-        JsonObject object = array.get(0).getAsJsonObject();
-        data.studentName = readString(object, "name", data.studentName);
-        data.className = readString(object, "class_name", data.className);
-        data.headline = readString(object, "headline", data.headline);
-        data.primaryGuideTitle = readString(object, "primary_guide_title", data.primaryGuideTitle);
-        data.primaryGuideText = readString(object, "primary_guide_text", data.primaryGuideText);
-        data.secondaryGuideTitle = readString(object, "secondary_guide_title", data.secondaryGuideTitle);
-        data.secondaryGuideText = readString(object, "secondary_guide_text", data.secondaryGuideText);
-        data.rank = readInt(object, "current_rank", data.rank);
-        data.totalStudents = readInt(object, "total_students", data.totalStudents);
-        data.percentile = readInt(object, "percentile", data.percentile);
-        data.academicsProgress = readInt(object, "academics_progress", data.academicsProgress);
-        data.codingProgress = readInt(object, "coding_progress", data.codingProgress);
-        data.clubsProgress = readInt(object, "clubs_progress", data.clubsProgress);
-        data.monthlyProgress = readProgress(object.get("monthly_progress"), data.monthlyProgress);
+        Map<String, Integer> submissionStats = SubmissionService.getSubmissionStats(user);
+        Map<String, Integer> achievementCounts = SubmissionService.getAchievementCounts(user);
+        int approvedProjects = achievementCounts.getOrDefault("projects", 0);
+        int approvedCertificates = achievementCounts.getOrDefault("certificates", 0);
+        int approvedWorkshops = achievementCounts.getOrDefault("workshops", 0);
+        int totalApproved = approvedProjects + approvedCertificates + approvedWorkshops;
+
+        int derivedRank = Math.max(1, data.totalStudents - Math.max(1, totalApproved * 3));
+        data.rank = profile == null ? derivedRank : readInt(profile, "current_rank", derivedRank);
+        data.percentile = profile == null
+                ? Math.min(99, 45 + totalApproved * 5)
+                : readInt(profile, "percentile", Math.min(99, 45 + totalApproved * 5));
+
+        data.academicsProgress = profile == null
+                ? Math.min(100, 40 + approvedCertificates * 10)
+                : readInt(profile, "academics_progress", Math.min(100, 40 + approvedCertificates * 10));
+        data.codingProgress = profile == null
+                ? Math.min(100, 35 + approvedProjects * 12)
+                : readInt(profile, "coding_progress", Math.min(100, 35 + approvedProjects * 12));
+        data.clubsProgress = profile == null
+                ? Math.min(100, 25 + approvedWorkshops * 14)
+                : readInt(profile, "clubs_progress", Math.min(100, 25 + approvedWorkshops * 14));
+
+        List<Integer> derivedMonthlyProgress = buildMonthlyProgress(user);
+        data.monthlyProgress = profile == null
+                ? derivedMonthlyProgress
+                : readProgress(profile.get("monthly_progress"), derivedMonthlyProgress);
+
+        if (totalApproved == 0 && submissionStats.getOrDefault("pending", 0) > 0) {
+            data.primaryGuideText = "You already have pending uploads. Once a teacher approves them, your rank and progress will move up automatically.";
+        } else if (totalApproved > 0) {
+            data.primaryGuideText = "Approved portfolio items: " + totalApproved + " across projects, certificates, and workshops.";
+            data.secondaryGuideText = "Current rank improves as more verified work is approved.";
+        }
+
+        if (submissionStats.getOrDefault("rejected", 0) > 0) {
+            data.secondaryGuideTitle = "Review feedback";
+            data.secondaryGuideText = "You have " + submissionStats.get("rejected") + " rejected submission(s). Update and re-upload improved work.";
+        }
 
         return data;
+    }
+
+    private static JsonObject fetchUserProfile(String prn) {
+        if (prn == null || prn.isBlank()) {
+            return null;
+        }
+        String endpoint = "/rest/v1/users?select=*&prn=eq." + encode(prn) + "&limit=1";
+        String response = ApiClient.get(endpoint);
+        if (response == null || response.isBlank() || "[]".equals(response)) {
+            return null;
+        }
+        try {
+            JsonArray array = JsonParser.parseString(response).getAsJsonArray();
+            return array.isEmpty() ? null : array.get(0).getAsJsonObject();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static List<Integer> buildMonthlyProgress(User user) {
+        List<Integer> monthly = new ArrayList<>();
+        Map<String, Integer> perMonth = new java.util.LinkedHashMap<>();
+        LocalDate now = LocalDate.now();
+        for (int index = 5; index >= 0; index--) {
+            LocalDate month = now.minusMonths(index);
+            perMonth.put(month.getYear() + "-" + month.getMonthValue(), 0);
+        }
+
+        for (Map<String, String> achievement : SubmissionService.getAchievements(user)) {
+            String rawDate = achievement.getOrDefault("date", "");
+            if (rawDate == null || rawDate.isBlank()) {
+                continue;
+            }
+            String monthKey = rawDate.length() >= 7 ? rawDate.substring(0, 7) : rawDate;
+            if (perMonth.containsKey(monthKey)) {
+                perMonth.put(monthKey, perMonth.get(monthKey) + 1);
+            }
+        }
+
+        for (Integer value : perMonth.values()) {
+            monthly.add(value * 10 + 10);
+        }
+        return monthly;
+    }
+
+    private static String fallback(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private static String encode(String value) {
@@ -91,26 +159,20 @@ public class DashboardService {
         }
 
         List<Integer> values = new ArrayList<>();
-
-        if (element.isJsonArray()) {
-            JsonArray array = element.getAsJsonArray();
-            for (JsonElement item : array) {
-                try {
+        try {
+            if (element.isJsonArray()) {
+                JsonArray array = element.getAsJsonArray();
+                for (JsonElement item : array) {
                     values.add(item.getAsInt());
-                } catch (Exception ignored) {
-                    return fallback;
                 }
-            }
-        } else {
-            String raw = element.getAsString();
-            String[] parts = raw.split(",");
-            for (String part : parts) {
-                try {
+            } else {
+                String[] parts = element.getAsString().split(",");
+                for (String part : parts) {
                     values.add(Integer.parseInt(part.trim()));
-                } catch (NumberFormatException ignored) {
-                    return fallback;
                 }
             }
+        } catch (Exception ignored) {
+            return fallback;
         }
 
         return values.isEmpty() ? fallback : values;

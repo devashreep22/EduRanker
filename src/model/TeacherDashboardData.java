@@ -14,6 +14,7 @@ public class TeacherDashboardData {
     public List<TeacherStudentRecord> studentRecords;
     public List<TeacherAssignmentRecord> assignmentRecords;
     public List<TeacherNoticeRecord> noticeRecords;
+    public List<TeacherSubmissionReviewRecord> reviewRecords;
 
     public TeacherDashboardData() {
         this.teacherPrn = "";
@@ -26,5 +27,6 @@ public class TeacherDashboardData {
         this.studentRecords = new ArrayList<>();
         this.assignmentRecords = new ArrayList<>();
         this.noticeRecords = new ArrayList<>();
+        this.reviewRecords = new ArrayList<>();
     }
 }
