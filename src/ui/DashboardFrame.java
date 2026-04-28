@@ -16,9 +16,14 @@ import java.util.List;
 public class DashboardFrame extends JFrame {
     private final User user;
     private DashboardData data;
+<<<<<<< HEAD
     private final CardLayout mainCardLayout = new CardLayout();
     private JPanel mainCardPanel;
     private StudentProgressPanel progressPanel;
+=======
+    private String currentView = "Dashboard";
+    private JPanel mainContentPanel;
+>>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
 
     public DashboardFrame(User user, DashboardData data) {
         this.user = user;
@@ -66,6 +71,7 @@ public class DashboardFrame extends JFrame {
 
         sidebar.add(brandRow);
         sidebar.add(Box.createVerticalStrut(36));
+<<<<<<< HEAD
         sidebar.add(buildMenuItem("Dashboard", true, null));
         sidebar.add(Box.createVerticalStrut(14));
         sidebar.add(buildMenuItem("Progress / Projects", false, this::openStudentProgress));
@@ -75,6 +81,17 @@ public class DashboardFrame extends JFrame {
         sidebar.add(buildMenuItem("AI Mentor", false, null));
         sidebar.add(Box.createVerticalStrut(14));
         sidebar.add(buildMenuItem("Settings", false, null));
+=======
+        sidebar.add(buildMenuItemButton("Dashboard", true));
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(buildMenuItemButton("Progress / Projects", false));
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(buildMenuItemButton("Reports", false));
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(buildMenuItemButton("AI Mentor", false));
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(buildMenuItemButton("Settings", false));
+>>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
         sidebar.add(Box.createVerticalGlue());
         sidebar.add(buildRefreshButton());
 
@@ -111,10 +128,38 @@ public class DashboardFrame extends JFrame {
         return panel;
     }
 
+<<<<<<< HEAD
     private void openStudentProgress() {
         if (mainCardPanel != null) {
             mainCardLayout.show(mainCardPanel, "progress");
         }
+=======
+    private JComponent buildMenuItemButton(String label, boolean active) {
+        RoundedPanel panel = new RoundedPanel(18,
+                active ? new Color(255, 250, 235) : new Color(255, 0, 0, 0),
+                new Color(0, 0, 0, active ? 18 : 0), 0, 0);
+        panel.setLayout(new BorderLayout());
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 62));
+        panel.setPreferredSize(new Dimension(210, 62));
+
+        JLabel item = new JLabel(label);
+        item.setBorder(new EmptyBorder(0, 18, 0, 12));
+        item.setFont(new Font("SansSerif", active ? Font.BOLD : Font.PLAIN, 18));
+        item.setForeground(new Color(26, 26, 26));
+        item.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        panel.add(item, BorderLayout.CENTER);
+
+        // Add click listener to switch views
+        panel.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                switchView(label);
+            }
+        });
+
+        return panel;
+>>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
     }
 
     private JComponent buildRefreshButton() {
@@ -142,40 +187,56 @@ public class DashboardFrame extends JFrame {
         main.setOpaque(false);
         main.setBorder(new EmptyBorder(28, 26, 28, 28));
 
-        JPanel content = new JPanel(new GridBagLayout());
-        content.setOpaque(false);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10, 10, 10, 10);
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.weightx = 1;
-        gbc.weighty = 0;
+        if (currentView.equals("Reports")) {
+            main.add(new StudentReportPanel(), BorderLayout.CENTER);
+        } else if (currentView.equals("Dashboard")) {
+            // Modern Dashboard view with charts and tables
+            main.add(new ModernDashboardPanel(data, user), BorderLayout.CENTER);
+        } else {
+            // Default Dashboard view
+            JPanel content = new JPanel(new GridBagLayout());
+            content.setOpaque(false);
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.insets = new Insets(10, 10, 10, 10);
+            gbc.fill = GridBagConstraints.BOTH;
+            gbc.weightx = 1;
+            gbc.weighty = 0;
 
-        JLabel title = new JLabel(data.headline);
-        title.setFont(new Font("SansSerif", Font.BOLD, 34));
-        title.setBorder(new EmptyBorder(0, 8, 8, 0));
-        main.add(title, BorderLayout.NORTH);
+            JLabel title = new JLabel(data.headline);
+            title.setFont(new Font("SansSerif", Font.BOLD, 34));
+            title.setBorder(new EmptyBorder(0, 8, 8, 0));
+            main.add(title, BorderLayout.NORTH);
 
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 0.62;
-        content.add(buildGuideAndRankColumn(), gbc);
+            gbc.gridx = 0;
+            gbc.gridy = 0;
+            gbc.weightx = 0.62;
+            content.add(buildGuideAndRankColumn(), gbc);
 
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        gbc.weightx = 0.38;
-        content.add(buildProfileColumn(), gbc);
+            gbc.gridx = 1;
+            gbc.gridy = 0;
+            gbc.weightx = 0.38;
+            content.add(buildProfileColumn(), gbc);
 
+<<<<<<< HEAD
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.weightx = 0.62;
         content.add(buildDashboardProgressCard(), gbc);
+=======
+            gbc.gridx = 0;
+            gbc.gridy = 1;
+            gbc.weightx = 0.62;
+            content.add(buildProgressCard(), gbc);
+>>>>>>> 170c2e6 (Add Modern Dashboard with Supabase Backend Integration)
 
-        gbc.gridx = 1;
-        gbc.gridy = 1;
-        gbc.weightx = 0.38;
-        content.add(buildMonthlyChartCard(), gbc);
+            gbc.gridx = 1;
+            gbc.gridy = 1;
+            gbc.weightx = 0.38;
+            content.add(buildMonthlyChartCard(), gbc);
 
-        main.add(content, BorderLayout.CENTER);
+            main.add(content, BorderLayout.CENTER);
+        }
+
         return main;
     }
 
@@ -409,6 +470,17 @@ public class DashboardFrame extends JFrame {
         worker.execute();
     }
 
+    private void switchView(String viewName) {
+        if (currentView.equals(viewName)) {
+            return;
+        }
+
+        currentView = viewName;
+        setContentPane(buildContent());
+        revalidate();
+        repaint();
+    }
+
     private static class GradientPanel extends JPanel {
         @Override
         protected void paintComponent(Graphics graphics) {
@@ -425,35 +497,6 @@ public class DashboardFrame extends JFrame {
             g2.fillOval(-100, -20, 380, 380);
             g2.fillOval(getWidth() - 280, getHeight() - 260, 300, 300);
             g2.dispose();
-        }
-    }
-
-    private static class RoundedPanel extends JPanel {
-        private final int radius;
-        private final Color fillColor;
-        private final Color shadowColor;
-        private final int shadowX;
-        private final int shadowY;
-
-        private RoundedPanel(int radius, Color fillColor, Color shadowColor, int shadowX, int shadowY) {
-            this.radius = radius;
-            this.fillColor = fillColor;
-            this.shadowColor = shadowColor;
-            this.shadowX = shadowX;
-            this.shadowY = shadowY;
-            setOpaque(false);
-        }
-
-        @Override
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D g2 = (Graphics2D) graphics.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(shadowColor);
-            g2.fillRoundRect(shadowX, shadowY, getWidth() - shadowX, getHeight() - shadowY, radius, radius);
-            g2.setColor(fillColor);
-            g2.fillRoundRect(0, 0, getWidth() - Math.max(shadowX, 0), getHeight() - Math.max(shadowY, 0), radius, radius);
-            g2.dispose();
-            super.paintComponent(graphics);
         }
     }
 
