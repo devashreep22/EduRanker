@@ -288,9 +288,8 @@ public class StudentProgressPanel extends JPanel {
             return;
         }
 
-        String dummyUrl = "https://example.com/uploads/" + selectedFile.getName();
-        Submission submission = new Submission(title.trim(), type, dummyUrl, "pending");
-        new UploadWorker(submission).execute();
+        Submission submission = new Submission(title.trim(), type, "", "pending");
+        new UploadWorker(submission, selectedFile).execute();
     }
 
     private void refreshDashboard() {
@@ -343,7 +342,7 @@ public class StudentProgressPanel extends JPanel {
         @Override
         protected List<Submission> doInBackground() {
             statusLabel.setText("Fetching submissions...");
-            return SubmissionService.fetchSubmissions();
+            return SubmissionService.fetchSubmissions(user == null ? null : user.id);
         }
 
         @Override
@@ -360,15 +359,17 @@ public class StudentProgressPanel extends JPanel {
 
     private class UploadWorker extends SwingWorker<Boolean, Void> {
         private final Submission submission;
+        private final File file;
 
-        public UploadWorker(Submission submission) {
+        public UploadWorker(Submission submission, File file) {
             this.submission = submission;
+            this.file = file;
         }
 
         @Override
         protected Boolean doInBackground() {
             statusLabel.setText("Uploading submission...");
-            return SubmissionService.uploadSubmission(submission);
+            return SubmissionService.uploadSubmission(submission, user == null ? null : user.id, file);
         }
 
         @Override

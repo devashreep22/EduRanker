@@ -9,6 +9,7 @@ import model.Submission;
 import util.Config;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -16,15 +17,21 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
 public class SubmissionService {
     private static final Gson GSON = new Gson();
 
-    public static List<Submission> fetchSubmissions() {
+    public static List<Submission> fetchSubmissions(String userId) {
         try {
-            URL url = new URL(Config.SUPABASE_URL + "/rest/v1/submissions?select=*");
+            String query = Config.SUPABASE_URL + "/rest/v1/submissions?select=*";
+            // Temporarily remove user_id filtering since column doesn't exist
+            // if (userId != null && !userId.isBlank()) {
+            //     query += "&user_id=eq." + URLEncoder.encode(userId, StandardCharsets.UTF_8);
+            // }
+            URL url = new URL(query);
             HttpURLConnection conn = createConnection(url, "GET");
 
             int status = conn.getResponseCode();
@@ -42,6 +49,7 @@ public class SubmissionService {
                 submission.type = readString(object, "type", "Unknown");
                 submission.file_url = readString(object, "file_url", "");
                 submission.status = readString(object, "status", "pending");
+                submission.user_id = readString(object, "user_id", ""); // Add this line
                 items.add(submission);
             }
             return items;
@@ -51,13 +59,35 @@ public class SubmissionService {
         }
     }
 
-    public static boolean uploadSubmission(Submission submission) {
+    public static boolean uploadSubmission(Submission submission, String userId, File file) {
         try {
+            // Temporarily don't set user_id since column doesn't exist
+            // if (userId != null && !userId.isBlank()) {
+            //     submission.user_id = userId;
+            // }
+            // Skip file upload for now since bucket doesn't exist
+            // if (file != null && file.exists()) {
+            //     String fileUrl = uploadFileToStorage(file, userId);
+            //     if (fileUrl == null) {
+            //         return false;
+            //     }
+            //     submission.file_url = fileUrl;
+            // }
+
+            // Create a copy without user_id for the payload
+            JsonObject jsonObj = new JsonObject();
+            jsonObj.addProperty("title", submission.title);
+            jsonObj.addProperty("type", submission.type);
+            jsonObj.addProperty("file_url", submission.file_url);
+            jsonObj.addProperty("status", submission.status);
+            // jsonObj.addProperty("user_id", submission.user_id); // Skip for now
+
             URL url = new URL(Config.SUPABASE_URL + "/rest/v1/submissions");
             HttpURLConnection conn = createConnection(url, "POST");
             conn.setDoOutput(true);
+            conn.setRequestProperty("Prefer", "return=representation");
 
-            String payload = GSON.toJson(submission);
+            String payload = jsonObj.toString();
             try (OutputStream outputStream = conn.getOutputStream()) {
                 outputStream.write(payload.getBytes(StandardCharsets.UTF_8));
                 outputStream.flush();
@@ -74,6 +104,48 @@ public class SubmissionService {
             e.printStackTrace();
             return false;
         }
+    }
+
+    private static String uploadFileToStorage(File file, String userId) {
+        try {
+            String remotePath = buildObjectPath(userId == null ? "anonymous" : userId, file.getName());
+            URL url = new URL(Config.SUPABASE_URL + "/storage/v1/object/" + Config.STORAGE_BUCKET + "/" + remotePath);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("PUT");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(30000);
+            conn.setReadTimeout(30000);
+            conn.setRequestProperty("apikey", Config.API_KEY);
+            conn.setRequestProperty("Authorization", "Bearer " + Config.API_KEY);
+            String contentType = Files.probeContentType(file.toPath());
+            if (contentType == null) {
+                contentType = "application/octet-stream";
+            }
+            conn.setRequestProperty("Content-Type", contentType);
+            conn.setFixedLengthStreamingMode((int) file.length());
+
+            try (OutputStream outputStream = conn.getOutputStream()) {
+                Files.copy(file.toPath(), outputStream);
+                outputStream.flush();
+            }
+
+            int status = conn.getResponseCode();
+            if (status >= 200 && status < 300) {
+                return Config.STORAGE_PUBLIC_URL + remotePath;
+            }
+            String error = readResponse(conn, status);
+            System.err.println("Storage upload failed: " + status + " " + error);
+            return null;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private static String buildObjectPath(String folder, String fileName) {
+        String encodedFolder = URLEncoder.encode(folder == null ? "" : folder, StandardCharsets.UTF_8).replace("+", "%20");
+        String encodedName = URLEncoder.encode(fileName == null ? "file" : fileName, StandardCharsets.UTF_8).replace("+", "%20");
+        return encodedFolder + "/" + encodedName;
     }
 
     private static HttpURLConnection createConnection(URL url, String method) throws Exception {
