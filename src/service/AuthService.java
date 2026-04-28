@@ -23,6 +23,9 @@ public class AuthService {
         JsonObject obj = array.get(0).getAsJsonObject();
 
         User user = new User();
+        if (obj.has("id") && !obj.get("id").isJsonNull()) {
+            user.id = obj.get("id").getAsString();
+        }
         user.prn = obj.get("prn").getAsString();
         user.role = obj.get("role").getAsString();
         user.name = obj.get("name").getAsString();

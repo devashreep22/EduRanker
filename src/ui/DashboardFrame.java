@@ -7,6 +7,8 @@ import service.DashboardService;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.util.List;
@@ -14,6 +16,9 @@ import java.util.List;
 public class DashboardFrame extends JFrame {
     private final User user;
     private DashboardData data;
+    private final CardLayout mainCardLayout = new CardLayout();
+    private JPanel mainCardPanel;
+    private StudentProgressPanel progressPanel;
 
     public DashboardFrame(User user, DashboardData data) {
         this.user = user;
@@ -61,15 +66,15 @@ public class DashboardFrame extends JFrame {
 
         sidebar.add(brandRow);
         sidebar.add(Box.createVerticalStrut(36));
-        sidebar.add(buildMenuItem("Dashboard", true));
+        sidebar.add(buildMenuItem("Dashboard", true, null));
         sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItem("Progress / Projects", false));
+        sidebar.add(buildMenuItem("Progress / Projects", false, this::openStudentProgress));
         sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItem("Reports", false));
+        sidebar.add(buildMenuItem("Reports", false, null));
         sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItem("AI Mentor", false));
+        sidebar.add(buildMenuItem("AI Mentor", false, null));
         sidebar.add(Box.createVerticalStrut(14));
-        sidebar.add(buildMenuItem("Settings", false));
+        sidebar.add(buildMenuItem("Settings", false, null));
         sidebar.add(Box.createVerticalGlue());
         sidebar.add(buildRefreshButton());
 
@@ -80,7 +85,7 @@ public class DashboardFrame extends JFrame {
         return wrapper;
     }
 
-    private JComponent buildMenuItem(String label, boolean active) {
+    private JComponent buildMenuItem(String label, boolean active, Runnable action) {
         RoundedPanel panel = new RoundedPanel(18,
                 active ? new Color(255, 250, 235) : new Color(255, 0, 0, 0),
                 new Color(0, 0, 0, active ? 18 : 0), 0, 0);
@@ -93,7 +98,23 @@ public class DashboardFrame extends JFrame {
         item.setFont(new Font("SansSerif", active ? Font.BOLD : Font.PLAIN, 18));
         item.setForeground(new Color(26, 26, 26));
         panel.add(item, BorderLayout.CENTER);
+
+        if (action != null) {
+            panel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            panel.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    action.run();
+                }
+            });
+        }
         return panel;
+    }
+
+    private void openStudentProgress() {
+        if (mainCardPanel != null) {
+            mainCardLayout.show(mainCardPanel, "progress");
+        }
     }
 
     private JComponent buildRefreshButton() {
@@ -109,6 +130,14 @@ public class DashboardFrame extends JFrame {
     }
 
     private JComponent buildMainPanel() {
+        mainCardPanel = new JPanel(mainCardLayout);
+        mainCardPanel.setOpaque(false);
+        mainCardPanel.add(buildDashboardContent(), "dashboard");
+        mainCardPanel.add(buildProgressCard(), "progress");
+        return mainCardPanel;
+    }
+
+    private JComponent buildDashboardContent() {
         JPanel main = new JPanel(new BorderLayout());
         main.setOpaque(false);
         main.setBorder(new EmptyBorder(28, 26, 28, 28));
@@ -139,7 +168,7 @@ public class DashboardFrame extends JFrame {
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.weightx = 0.62;
-        content.add(buildProgressCard(), gbc);
+        content.add(buildDashboardProgressCard(), gbc);
 
         gbc.gridx = 1;
         gbc.gridy = 1;
@@ -148,6 +177,37 @@ public class DashboardFrame extends JFrame {
 
         main.add(content, BorderLayout.CENTER);
         return main;
+    }
+
+    private JComponent buildDashboardProgressCard() {
+        RoundedPanel card = new RoundedPanel(28, new Color(255, 255, 255), new Color(0, 0, 0, 16), 0, 0);
+        card.setLayout(new BorderLayout());
+        card.setBorder(new EmptyBorder(24, 24, 24, 24));
+
+        JLabel title = new JLabel("Progress Summary");
+        title.setFont(new Font("SansSerif", Font.BOLD, 22));
+        title.setBorder(new EmptyBorder(0, 0, 16, 0));
+
+        JTextArea summary = new JTextArea("Open the Progress / Projects tab to review submitted work, upload new items, and refresh status without leaving the dashboard.");
+        summary.setLineWrap(true);
+        summary.setWrapStyleWord(true);
+        summary.setEditable(false);
+        summary.setOpaque(false);
+        summary.setFont(new Font("SansSerif", Font.PLAIN, 15));
+        summary.setForeground(new Color(75, 75, 75));
+
+        card.add(title, BorderLayout.NORTH);
+        card.add(summary, BorderLayout.CENTER);
+        return card;
+    }
+
+    private JComponent buildProgressCard() {
+        progressPanel = new StudentProgressPanel(user, () -> mainCardLayout.show(mainCardPanel, "dashboard"));
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
+        wrapper.setBorder(new EmptyBorder(28, 26, 28, 28));
+        wrapper.add(progressPanel, BorderLayout.CENTER);
+        return wrapper;
     }
 
     private JComponent buildGuideAndRankColumn() {
@@ -287,25 +347,6 @@ public class DashboardFrame extends JFrame {
         card.add(stats);
         card.add(Box.createVerticalGlue());
 
-        return card;
-    }
-
-    private JComponent buildProgressCard() {
-        RoundedPanel card = new RoundedPanel(28, new Color(255, 255, 255), new Color(0, 0, 0, 14), 0, 0);
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(new EmptyBorder(22, 26, 26, 26));
-
-        JLabel title = new JLabel("Progress");
-        title.setFont(new Font("SansSerif", Font.BOLD, 30));
-        title.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        card.add(title);
-        card.add(Box.createVerticalStrut(22));
-        card.add(buildProgressRow("Academics", data.academicsProgress));
-        card.add(Box.createVerticalStrut(18));
-        card.add(buildProgressRow("Coding", data.codingProgress));
-        card.add(Box.createVerticalStrut(18));
-        card.add(buildProgressRow("Clubs", data.clubsProgress));
         return card;
     }
 
