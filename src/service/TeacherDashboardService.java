@@ -10,14 +10,15 @@ import model.TeacherAssignmentRecord;
 import model.TeacherClassRecord;
 import model.TeacherDashboardData;
 import model.TeacherNoticeRecord;
-import model.TeacherStudentRecord;
 import model.TeacherSubmissionReviewRecord;
 import model.User;
+import model.StudentActivity;
 import util.ApiClient;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -187,6 +188,23 @@ public class TeacherDashboardService {
                 : "Submission rejected and student dashboard updated");
     }
 
+    public static boolean approveSubmission(String submissionId) {
+        try {
+            JsonObject payload = new JsonObject();
+            payload.addProperty("status", "approved");
+            payload.addProperty("updated_at", LocalDateTime.now().toString());
+
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Prefer", "return=representation");
+
+            String response = ApiClient.send("PATCH", "/rest/v1/submissions?id=eq." + submissionId, payload.toString(), headers);
+            return response != null && !response.isEmpty();
+        } catch (Exception e) {
+            System.err.println("Failed to approve submission: " + submissionId);
+            return false;
+        }
+    }
+
     private static JsonObject fetchTeacher(String preferredTeacherPrn) {
         String endpoint;
         if (preferredTeacherPrn != null && !preferredTeacherPrn.isBlank()) {
@@ -226,22 +244,27 @@ public class TeacherDashboardService {
 
     private static List<TeacherStudentRecord> fetchStudents(List<TeacherClassRecord> classes) {
         List<TeacherStudentRecord> records = new ArrayList<>();
-        JsonArray array = parseArray(ApiClient.get("/rest/v1/users?select=prn,id,name,class_name,attendance_percentage,assignment_marks,exam_marks,role&role=eq.student"));
+        // Fetch all students from the users table, regardless of class assignment
+        JsonArray array = parseArray(ApiClient.get("/rest/v1/users?select=prn,id,name,class_name,attendance_percentage,assignment_marks,exam_marks,role&role=eq.student&order=prn.asc"));
         for (JsonElement element : array) {
             JsonObject object = element.getAsJsonObject();
             TeacherStudentRecord record = new TeacherStudentRecord();
             record.id = readString(object, "prn", readString(object, "id", ""));
-            record.name = readString(object, "name", "");
-            record.className = readString(object, "class_name", "");
+            record.name = readString(object, "name", "Unknown Student");
+            record.className = readString(object, "class_name", "General");
             record.attendancePercentage = readInt(object, "attendance_percentage", 0);
             record.assignmentMarks = readInt(object, "assignment_marks", 0);
             record.examMarks = readInt(object, "exam_marks", 0);
             record.present = true;
 
+            // Show all students (don't filter by class if classes list is empty or has no matching students)
             if (!classes.isEmpty() && !belongsToClasses(record.className, classes)) {
-                continue;
+                // Still include student - teacher should see all students
+                // continue; <-- Commented out to show all students
             }
-            records.add(record);
+            if (!record.id.isBlank()) {
+                records.add(record);
+            }
         }
         return records;
     }
@@ -397,5 +420,27 @@ public class TeacherDashboardService {
 
     private static String encode(String value) {
         return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
+    }
+
+    public List<StudentActivity> getAllStudentActivities() {
+        List<StudentActivity> activities = new ArrayList<>();
+        try {
+            String response = ApiClient.get("/rest/v1/submissions?select=*");
+            JsonArray submissions = JsonParser.parseString(response).getAsJsonArray();
+
+            for (JsonElement element : submissions) {
+                JsonObject submission = element.getAsJsonObject();
+                StudentActivity activity = new StudentActivity();
+                activity.setPrn(submission.get("student_prn").getAsString());
+                activity.setTitle(submission.get("title").getAsString());
+                activity.setType(submission.get("type").getAsString());
+                activity.setDescription(submission.get("description").getAsString());
+                activity.setStatus(submission.get("status").getAsString());
+                activities.add(activity);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to fetch student activities: " + e.getMessage());
+        }
+        return activities;
     }
 }

@@ -368,7 +368,13 @@ public class TeacherDashboardFrame extends JFrame {
     }
 
     private JPanel createStudentsPanel() {
-        JPanel page = createPageShell("Students", "Students visible to this teacher");
+        JPanel page = createPageShell("Students", "All students and their submissions");
+        
+        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane.setBackground(CARD_BG);
+        tabbedPane.setForeground(TEXT_PRIMARY);
+        
+        // Tab 1: Student Directory
         DefaultTableModel model = new DefaultTableModel(new String[]{"PRN", "Name", "Class", "Attendance", "Assignment Marks", "Exam Marks"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -385,7 +391,32 @@ public class TeacherDashboardFrame extends JFrame {
                     record.examMarks
             });
         }
-        page.add(createPanelCard("Student Directory", createTableSection(createTable(model), null)), BorderLayout.CENTER);
+        JPanel studentTable = createTableSection(createTable(model), null);
+        tabbedPane.addTab("Student Directory", createPanelCard("All Students", studentTable));
+        
+        // Tab 2: Student Submissions by PRN
+        DefaultTableModel submissionModel = new DefaultTableModel(new String[]{"Student PRN", "Student Name", "Title", "Type", "Status", "Date"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        
+        for (TeacherSubmissionReviewRecord review : reviewRecords) {
+            submissionModel.addRow(new Object[]{
+                    review.studentPrn,
+                    review.studentName,
+                    review.title,
+                    review.type,
+                    review.status,
+                    review.createdAt
+            });
+        }
+        
+        JPanel submissionTable = createTableSection(createTable(submissionModel), null);
+        tabbedPane.addTab("Student Submissions", createPanelCard("All Submissions", submissionTable));
+        
+        page.add(tabbedPane, BorderLayout.CENTER);
         return page;
     }
 

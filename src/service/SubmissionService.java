@@ -394,7 +394,14 @@ public class SubmissionService {
                 contentType = "application/octet-stream";
             }
             conn.setRequestProperty("Content-Type", contentType);
-            conn.setFixedLengthStreamingMode((int) file.length());
+            
+            // Handle large files using chunked encoding
+            long fileSize = file.length();
+            if (fileSize > Integer.MAX_VALUE) {
+                conn.setChunkedStreamingMode(8192);
+            } else {
+                conn.setFixedLengthStreamingMode((int) fileSize);
+            }
 
             try (OutputStream outputStream = conn.getOutputStream()) {
                 Files.copy(file.toPath(), outputStream);
@@ -403,13 +410,16 @@ public class SubmissionService {
 
             int status = conn.getResponseCode();
             if (status >= 200 && status < 300) {
+                System.out.println("File uploaded successfully to: " + Config.STORAGE_PUBLIC_URL + remotePath);
                 return Config.STORAGE_PUBLIC_URL + remotePath;
             }
             String error = readResponse(conn, status);
             System.err.println("Storage upload failed: " + status + " " + error);
+            System.err.println("File: " + file.getAbsolutePath() + ", Size: " + fileSize);
             return null;
         } catch (Exception exception) {
             exception.printStackTrace();
+            System.err.println("Error uploading file to storage: " + exception.getMessage());
             return null;
         }
     }
@@ -479,5 +489,28 @@ public class SubmissionService {
 
     private static String encode(String value) {
         return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
+    }
+
+    public static boolean uploadCertificate(String studentPrn, String filePath) {
+        try {
+            File file = new File(filePath);
+            if (!file.exists()) {
+                System.err.println("File not found: " + filePath);
+                return false;
+            }
+
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Content-Type", "multipart/form-data");
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("student_prn", studentPrn);
+            payload.addProperty("file_url", file.getName());
+
+            String response = ApiClient.uploadFile("/storage/v1/certificates", file, headers);
+            return response != null && !response.isEmpty();
+        } catch (Exception e) {
+            System.err.println("Certificate upload failed for PRN: " + studentPrn);
+            return false;
+        }
     }
 }

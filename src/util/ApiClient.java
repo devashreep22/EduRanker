@@ -1,13 +1,21 @@
 package util;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Enhanced API Client for Supabase REST API
@@ -80,6 +88,37 @@ public class ApiClient {
             e.printStackTrace();
             return null;
         }
+    }
+
+    public static String uploadFile(String endpoint, File file, Map<String, String> headers) {
+        try {
+            HttpURLConnection connection = (HttpURLConnection) new URL(Config.SUPABASE_URL + endpoint).openConnection();
+            connection.setDoOutput(true);
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=---Boundary");
+
+            for (Map.Entry<String, String> header : headers.entrySet()) {
+                connection.setRequestProperty(header.getKey(), header.getValue());
+            }
+
+            try (OutputStream outputStream = connection.getOutputStream()) {
+                outputStream.write(("---Boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + file.getName() + "\"\r\n\r\n").getBytes());
+                Files.copy(file.toPath(), outputStream);
+                outputStream.write("\r\n---Boundary--\r\n".getBytes());
+            }
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    return reader.lines().collect(Collectors.joining());
+                }
+            } else {
+                System.err.println("File upload failed with response code: " + responseCode);
+            }
+        } catch (Exception e) {
+            System.err.println("Error during file upload: " + e.getMessage());
+        }
+        return null;
     }
 
     private static String handleResponse(HttpURLConnection conn) throws Exception {
