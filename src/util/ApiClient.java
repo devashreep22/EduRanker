@@ -10,10 +10,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.net.URI;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -22,6 +26,7 @@ import java.util.stream.Collectors;
  * Supports GET, POST, PATCH, DELETE operations
  */
 public class ApiClient {
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder().build();
 
     public static String get(String endpoint) {
         return send("GET", endpoint, null, null);
@@ -37,32 +42,28 @@ public class ApiClient {
 
     public static String send(String method, String endpoint, String body, Map<String, String> extraHeaders) {
         try {
-            URL url = new URL(Config.SUPABASE_URL + endpoint);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-
-            conn.setRequestMethod(method);
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
-            conn.setRequestProperty("apikey", Config.API_KEY);
-            conn.setRequestProperty("Authorization", "Bearer " + Config.API_KEY);
-            conn.setRequestProperty("Accept", "application/json");
-            conn.setRequestProperty("Content-Type", "application/json");
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(Config.SUPABASE_URL + endpoint))
+                    .header("apikey", Config.API_KEY)
+                    .header("Authorization", "Bearer " + Config.API_KEY)
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/json");
 
             if (extraHeaders != null) {
                 for (Map.Entry<String, String> entry : extraHeaders.entrySet()) {
-                    conn.setRequestProperty(entry.getKey(), entry.getValue());
+                    builder.header(entry.getKey(), entry.getValue());
                 }
             }
 
-            if (body != null) {
-                conn.setDoOutput(true);
-                byte[] payload = body.getBytes(StandardCharsets.UTF_8);
-                try (OutputStream outputStream = conn.getOutputStream()) {
-                    outputStream.write(payload);
-                }
-            }
+            HttpRequest request = builder.method(
+                    method,
+                    body == null
+                            ? HttpRequest.BodyPublishers.noBody()
+                            : HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)
+            ).build();
 
-            return handleResponse(conn);
+            HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return handleResponse(response.statusCode(), response.body());
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -71,23 +72,7 @@ public class ApiClient {
     }
 
     public static String delete(String endpoint) {
-        try {
-            URL url = new URL(Config.SUPABASE_URL + endpoint);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-
-            conn.setRequestMethod("DELETE");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
-            conn.setRequestProperty("apikey", Config.API_KEY);
-            conn.setRequestProperty("Authorization", "Bearer " + Config.API_KEY);
-            conn.setRequestProperty("Accept", "application/json");
-
-            return handleResponse(conn);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
+        return send("DELETE", endpoint, null, null);
     }
 
     public static String uploadFile(String endpoint, File file, Map<String, String> headers) {
@@ -121,33 +106,18 @@ public class ApiClient {
         return null;
     }
 
-    private static String handleResponse(HttpURLConnection conn) throws Exception {
-        int statusCode = conn.getResponseCode();
-        InputStream stream = statusCode >= 200 && statusCode < 300
-                ? conn.getInputStream()
-                : conn.getErrorStream();
-
-        if (stream == null) {
+    private static String handleResponse(int statusCode, String body) {
+        if (body == null) {
             System.err.println("Error: HTTP " + statusCode);
             return null;
         }
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
-        StringBuilder response = new StringBuilder();
-        String line;
-
-        while ((line = reader.readLine()) != null) {
-            response.append(line);
-        }
-
-        reader.close();
         
         if (statusCode >= 400) {
-            System.err.println("API Error " + statusCode + ": " + response.toString());
+            System.err.println("API Error " + statusCode + ": " + body);
             return null;
         }
 
-        return response.toString();
+        return body;
     }
 }
 

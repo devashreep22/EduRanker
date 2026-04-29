@@ -21,11 +21,14 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class SubmissionService {
     private static final String[] STUDENT_FILTER_FIELDS = {"student_id", "student_prn"};
@@ -61,6 +64,7 @@ public class SubmissionService {
         }
 
         try {
+            ensureStudentRecord(user);
             if (file != null && file.exists()) {
                 String fileUrl = uploadFileToStorage(file, user.prn == null || user.prn.isBlank() ? user.id : user.prn);
                 if (fileUrl == null) {
@@ -207,12 +211,36 @@ public class SubmissionService {
         if (review == null || review.studentPrn == null || review.studentPrn.isBlank()) {
             return false;
         }
+        JsonObject payload = new JsonObject();
+        payload.addProperty("student_prn", review.studentPrn);
+        payload.addProperty("title", valueOrDefault(review.title, "Untitled Submission"));
+        payload.addProperty("category", normalizeSubmissionType(review.type));
+        payload.addProperty("description", valueOrDefault(review.description, ""));
+        payload.addProperty("achieved_date", LocalDate.now().toString());
+        payload.addProperty("certificate_url", valueOrDefault(review.fileUrl, ""));
+        payload.addProperty("badge_earned", true);
 
-        return true;
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Prefer", "return=representation");
+
+        String existingId = findAchievementId(review.studentPrn, review.title, review.type);
+        String response = existingId == null
+                ? ApiClient.send("POST", "/rest/v1/achievements", payload.toString(), headers)
+                : ApiClient.send("PATCH", "/rest/v1/achievements?id=eq." + encode(existingId), payload.toString(), headers);
+        return isWriteSuccessful(response);
     }
 
     public static boolean removeAchievementForSubmission(TeacherSubmissionReviewRecord review) {
-        return true;
+        if (review == null || review.studentPrn == null || review.studentPrn.isBlank()) {
+            return false;
+        }
+
+        String existingId = findAchievementId(review.studentPrn, review.title, review.type);
+        if (existingId == null || existingId.isBlank()) {
+            return true;
+        }
+        String response = ApiClient.delete("/rest/v1/achievements?id=eq." + encode(existingId));
+        return response != null;
     }
 
     public static boolean refreshStudentMetrics(String studentPrn, int totalStudents) {
@@ -278,12 +306,17 @@ public class SubmissionService {
     }
 
     private static JsonObject buildSubmissionPayload(Submission submission, String studentField, String identifier) {
+        Set<String> submissionColumns = fetchSubmissionColumns();
         JsonObject payload = new JsonObject();
         payload.addProperty(studentField, identifier);
         payload.addProperty("title", submission.title);
         payload.addProperty("type", submission.type == null ? "project" : submission.type.toLowerCase());
-        payload.addProperty("description", submission.description == null ? "" : submission.description);
-        payload.addProperty("file_url", submission.file_url == null ? "" : submission.file_url);
+        if (supportsSubmissionColumn(submissionColumns, "description")) {
+            payload.addProperty("description", submission.description == null ? "" : submission.description);
+        }
+        if (supportsSubmissionColumn(submissionColumns, "file_url")) {
+            payload.addProperty("file_url", submission.file_url == null ? "" : submission.file_url);
+        }
         payload.addProperty("status", submission.status == null || submission.status.isBlank() ? "pending" : submission.status.toLowerCase());
         return payload;
     }
@@ -297,6 +330,23 @@ public class SubmissionService {
             identifiers.add(user.id);
         }
         return identifiers;
+    }
+
+    private static void ensureStudentRecord(User user) {
+        if (user == null || user.id == null || user.id.isBlank()) {
+            return;
+        }
+        String existing = ApiClient.get("/rest/v1/students?select=id&id=eq." + encode(user.id) + "&limit=1");
+        JsonArray array = parseArray(existing);
+        if (!array.isEmpty()) {
+            return;
+        }
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("id", user.id);
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Prefer", "return=representation");
+        ApiClient.send("POST", "/rest/v1/students", payload.toString(), headers);
     }
 
     private static List<Submission> filterSubmissionsForUser(List<Submission> submissions, User user) {
@@ -394,6 +444,7 @@ public class SubmissionService {
                 contentType = "application/octet-stream";
             }
             conn.setRequestProperty("Content-Type", contentType);
+            conn.setRequestProperty("x-upsert", "true");
             
             // Handle large files using chunked encoding
             long fileSize = file.length();
@@ -426,7 +477,9 @@ public class SubmissionService {
 
     private static String buildObjectPath(String folder, String fileName) {
         String encodedFolder = URLEncoder.encode(folder == null ? "" : folder, StandardCharsets.UTF_8).replace("+", "%20");
-        String encodedName = URLEncoder.encode(fileName == null ? "file" : fileName, StandardCharsets.UTF_8).replace("+", "%20");
+        String safeName = (fileName == null || fileName.isBlank()) ? "file" : fileName;
+        String uniqueName = LocalDateTime.now().toString().replace(":", "-") + "-" + safeName;
+        String encodedName = URLEncoder.encode(uniqueName, StandardCharsets.UTF_8).replace("+", "%20");
         return encodedFolder + "/" + encodedName;
     }
 
@@ -499,18 +552,74 @@ public class SubmissionService {
                 return false;
             }
 
-            Map<String, String> headers = new HashMap<>();
-            headers.put("Content-Type", "multipart/form-data");
-
-            JsonObject payload = new JsonObject();
-            payload.addProperty("student_prn", studentPrn);
-            payload.addProperty("file_url", file.getName());
-
-            String response = ApiClient.uploadFile("/storage/v1/certificates", file, headers);
-            return response != null && !response.isEmpty();
+            Submission submission = new Submission(file.getName(), "certificate", "", "pending");
+            submission.description = "Certificate uploaded from student portal";
+            User user = new User();
+            user.prn = studentPrn;
+            user.id = studentPrn;
+            return uploadSubmission(submission, user, file);
         } catch (Exception e) {
             System.err.println("Certificate upload failed for PRN: " + studentPrn);
             return false;
         }
+    }
+
+    private static String findAchievementId(String studentPrn, String title, String type) {
+        String endpoint = "/rest/v1/achievements?select=id"
+                + "&student_prn=eq." + encode(studentPrn)
+                + "&title=eq." + encode(valueOrDefault(title, ""))
+                + "&category=eq." + encode(normalizeSubmissionType(type))
+                + "&limit=1";
+        JsonArray array = parseArray(ApiClient.get(endpoint));
+        if (array.isEmpty()) {
+            return null;
+        }
+        return readString(array.get(0).getAsJsonObject(), "id", null);
+    }
+
+    private static JsonArray parseArray(String response) {
+        if (response == null || response.isBlank()) {
+            return new JsonArray();
+        }
+        try {
+            JsonElement element = JsonParser.parseString(response);
+            return element.isJsonArray() ? element.getAsJsonArray() : new JsonArray();
+        } catch (Exception ignored) {
+            return new JsonArray();
+        }
+    }
+
+    private static String normalizeSubmissionType(String type) {
+        String normalized = valueOrDefault(type, "project").trim().toLowerCase();
+        if (normalized.equals("projects")) {
+            return "project";
+        }
+        if (normalized.equals("certificates")) {
+            return "certificate";
+        }
+        if (normalized.equals("workshops")) {
+            return "workshop";
+        }
+        return normalized;
+    }
+
+    private static String valueOrDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static Set<String> fetchSubmissionColumns() {
+        Set<String> columns = new HashSet<>();
+        JsonArray array = parseArray(ApiClient.get("/rest/v1/submissions?select=*&limit=1"));
+        if (array.isEmpty()) {
+            return columns;
+        }
+        for (Map.Entry<String, JsonElement> entry : array.get(0).getAsJsonObject().entrySet()) {
+            columns.add(entry.getKey());
+        }
+        return columns;
+    }
+
+    private static boolean supportsSubmissionColumn(Set<String> columns, String columnName) {
+        return columns.isEmpty() || columns.contains(columnName);
     }
 }

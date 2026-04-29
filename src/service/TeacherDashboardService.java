@@ -10,6 +10,7 @@ import model.TeacherAssignmentRecord;
 import model.TeacherClassRecord;
 import model.TeacherDashboardData;
 import model.TeacherNoticeRecord;
+import model.TeacherStudentRecord;
 import model.TeacherSubmissionReviewRecord;
 import model.User;
 import model.StudentActivity;
@@ -198,7 +199,7 @@ public class TeacherDashboardService {
             headers.put("Prefer", "return=representation");
 
             String response = ApiClient.send("PATCH", "/rest/v1/submissions?id=eq." + submissionId, payload.toString(), headers);
-            return response != null && !response.isEmpty();
+            return isWriteSuccessful(response);
         } catch (Exception e) {
             System.err.println("Failed to approve submission: " + submissionId);
             return false;

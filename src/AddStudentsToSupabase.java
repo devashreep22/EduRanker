@@ -1,10 +1,13 @@
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import util.ApiClient;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Script to add multiple students to Supabase database
@@ -45,7 +48,10 @@ public class AddStudentsToSupabase {
             
             // Check if student already exists
             if (studentExists(prnStr)) {
-                System.out.println("ALREADY EXISTS (skipped)");
+                updateStudentPassword(prnStr, password);
+                ensureStudentMirror(prnStr);
+                addSampleSubmissions(prnStr, name);
+                System.out.println("ALREADY EXISTS (password checked, submissions synced)");
                 continue;
             }
             
@@ -53,7 +59,8 @@ public class AddStudentsToSupabase {
             if (addStudent(prnStr, password, name, email, className, department)) {
                 System.out.println("✓ SUCCESS");
                 addedCount++;
-                
+                ensureStudentMirror(prnStr);
+
                 // Add sample submissions for this student
                 addSampleSubmissions(prnStr, name);
                 
@@ -123,6 +130,20 @@ public class AddStudentsToSupabase {
             System.err.println("Failed to add student: " + prn);
         }
     }
+
+    private static void updateStudentPassword(String prn, String password) {
+        try {
+            JsonObject payload = new JsonObject();
+            payload.addProperty("password", password);
+
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Prefer", "return=representation");
+
+            ApiClient.send("PATCH", "/rest/v1/users?prn=eq." + encode(prn), payload.toString(), headers);
+        } catch (Exception e) {
+            System.err.println("Failed to update password for student: " + prn);
+        }
+    }
     
     private static void addSampleSubmissions(String studentPrn, String studentName) {
         // Add 3 sample submissions per student
@@ -139,14 +160,29 @@ public class AddStudentsToSupabase {
     
     private static void addSubmission(String studentPrn, String studentName, String title, String type, String description, String status) {
         try {
+            String studentField = detectSubmissionStudentField();
+            String submissionIdentifier = resolveSubmissionIdentifier(studentPrn, studentField);
+            if (submissionIdentifier == null || submissionIdentifier.isBlank()) {
+                return;
+            }
+            if (submissionExists(submissionIdentifier, title, type, studentField)) {
+                return;
+            }
+            Set<String> submissionColumns = fetchSubmissionColumns();
             JsonObject payload = new JsonObject();
-            payload.addProperty("student_prn", studentPrn);
-            payload.addProperty("student_name", studentName);
+            payload.addProperty(studentField, submissionIdentifier);
+            if (submissionColumns.contains("student_name")) {
+                payload.addProperty("student_name", studentName);
+            }
             payload.addProperty("title", title);
             payload.addProperty("type", type);
-            payload.addProperty("description", description);
+            if (submissionColumns.isEmpty() || submissionColumns.contains("description")) {
+                payload.addProperty("description", description);
+            }
             payload.addProperty("status", status);
-            payload.addProperty("file_url", "");
+            if (submissionColumns.isEmpty() || submissionColumns.contains("file_url")) {
+                payload.addProperty("file_url", "");
+            }
             
             Map<String, String> headers = new HashMap<>();
             headers.put("Prefer", "return=representation");
@@ -156,6 +192,103 @@ public class AddStudentsToSupabase {
         } catch (Exception e) {
             // Silent fail for submissions
         }
+    }
+
+    private static boolean submissionExists(String studentIdentifier, String title, String type, String studentField) {
+        String endpoint = "/rest/v1/submissions?select=id"
+                + "&" + studentField + "=eq." + encode(studentIdentifier)
+                + "&title=eq." + encode(title)
+                + "&type=eq." + encode(type)
+                + "&limit=1";
+        String response = ApiClient.get(endpoint);
+        if (response == null) {
+            return false;
+        }
+        try {
+            JsonArray array = JsonParser.parseString(response).getAsJsonArray();
+            return array.size() > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String resolveSubmissionIdentifier(String prn, String studentField) {
+        if (!"student_id".equals(studentField)) {
+            return prn;
+        }
+        ensureStudentMirror(prn);
+        String response = ApiClient.get("/rest/v1/users?select=id&prn=eq." + encode(prn) + "&limit=1");
+        if (response == null || response.equals("[]")) {
+            return null;
+        }
+        try {
+            JsonArray array = JsonParser.parseString(response).getAsJsonArray();
+            if (array.size() == 0) {
+                return null;
+            }
+            return array.get(0).getAsJsonObject().get("id").getAsString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static void ensureStudentMirror(String prn) {
+        try {
+            String response = ApiClient.get("/rest/v1/users?select=id&prn=eq." + encode(prn) + "&limit=1");
+            if (response == null || response.equals("[]")) {
+                return;
+            }
+            JsonArray users = JsonParser.parseString(response).getAsJsonArray();
+            if (users.size() == 0) {
+                return;
+            }
+            String userId = users.get(0).getAsJsonObject().get("id").getAsString();
+            String existing = ApiClient.get("/rest/v1/students?select=id&id=eq." + encode(userId) + "&limit=1");
+            JsonArray students = existing == null || existing.isBlank()
+                    ? new JsonArray()
+                    : JsonParser.parseString(existing).getAsJsonArray();
+            if (students.size() > 0) {
+                return;
+            }
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("id", userId);
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Prefer", "return=representation");
+            ApiClient.send("POST", "/rest/v1/students", payload.toString(), headers);
+        } catch (Exception e) {
+            System.err.println("Failed to ensure student mirror for PRN: " + prn);
+        }
+    }
+
+    private static String detectSubmissionStudentField() {
+        Set<String> columns = fetchSubmissionColumns();
+        if (columns.contains("student_id")) {
+            return "student_id";
+        }
+        if (columns.contains("student_prn")) {
+            return "student_prn";
+        }
+        return "student_id";
+    }
+
+    private static Set<String> fetchSubmissionColumns() {
+        Set<String> columns = new HashSet<>();
+        String response = ApiClient.get("/rest/v1/submissions?select=*&limit=1");
+        if (response == null || response.equals("[]")) {
+            return columns;
+        }
+        try {
+            JsonArray array = JsonParser.parseString(response).getAsJsonArray();
+            if (array.size() == 0) {
+                return columns;
+            }
+            for (Map.Entry<String, JsonElement> entry : array.get(0).getAsJsonObject().entrySet()) {
+                columns.add(entry.getKey());
+            }
+        } catch (Exception ignored) {
+        }
+        return columns;
     }
     
     private static boolean isSuccessful(String response) {

@@ -45,6 +45,8 @@ public class TeacherDashboardFrame extends JFrame {
     private final String sourceMessage;
 
     private DefaultTableModel reviewTableModel;
+    private DefaultTableModel studentDirectoryTableModel;
+    private DefaultTableModel studentSubmissionTableModel;
     private DefaultTableModel attendanceTableModel;
     private DefaultTableModel marksTableModel;
     private DefaultTableModel assignmentTableModel;
@@ -374,46 +376,24 @@ public class TeacherDashboardFrame extends JFrame {
         tabbedPane.setBackground(CARD_BG);
         tabbedPane.setForeground(TEXT_PRIMARY);
         
-        // Tab 1: Student Directory
-        DefaultTableModel model = new DefaultTableModel(new String[]{"PRN", "Name", "Class", "Attendance", "Assignment Marks", "Exam Marks"}, 0) {
+        studentDirectoryTableModel = new DefaultTableModel(new String[]{"PRN", "Name", "Class", "Attendance", "Assignment Marks", "Exam Marks"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
-        for (TeacherStudentRecord record : studentRecords) {
-            model.addRow(new Object[]{
-                    record.id,
-                    record.name,
-                    record.className,
-                    record.attendancePercentage,
-                    record.assignmentMarks,
-                    record.examMarks
-            });
-        }
-        JPanel studentTable = createTableSection(createTable(model), null);
+        reloadStudentDirectoryTable();
+        JPanel studentTable = createTableSection(createTable(studentDirectoryTableModel), null);
         tabbedPane.addTab("Student Directory", createPanelCard("All Students", studentTable));
         
-        // Tab 2: Student Submissions by PRN
-        DefaultTableModel submissionModel = new DefaultTableModel(new String[]{"Student PRN", "Student Name", "Title", "Type", "Status", "Date"}, 0) {
+        studentSubmissionTableModel = new DefaultTableModel(new String[]{"Student PRN", "Student Name", "Title", "Type", "Status", "Date"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
-        
-        for (TeacherSubmissionReviewRecord review : reviewRecords) {
-            submissionModel.addRow(new Object[]{
-                    review.studentPrn,
-                    review.studentName,
-                    review.title,
-                    review.type,
-                    review.status,
-                    review.createdAt
-            });
-        }
-        
-        JPanel submissionTable = createTableSection(createTable(submissionModel), null);
+        reloadStudentSubmissionTable();
+        JPanel submissionTable = createTableSection(createTable(studentSubmissionTableModel), null);
         tabbedPane.addTab("Student Submissions", createPanelCard("All Submissions", submissionTable));
         
         page.add(tabbedPane, BorderLayout.CENTER);
@@ -705,6 +685,7 @@ public class TeacherDashboardFrame extends JFrame {
         if (result.success) {
             review.status = approve ? "approved" : "rejected";
             reloadReviewTable();
+            reloadStudentSubmissionTable();
         }
     }
 
@@ -730,9 +711,13 @@ public class TeacherDashboardFrame extends JFrame {
 
     private void refreshReviews() {
         TeacherDashboardData refreshed = TeacherDashboardService.loadDashboard(teacherPrn);
+        studentRecords.clear();
+        studentRecords.addAll(refreshed.studentRecords);
         reviewRecords.clear();
         reviewRecords.addAll(refreshed.reviewRecords);
         reloadReviewTable();
+        reloadStudentDirectoryTable();
+        reloadStudentSubmissionTable();
         statusBar.setText(" Review queue refreshed");
     }
 
@@ -771,6 +756,40 @@ public class TeacherDashboardFrame extends JFrame {
         noticeTableModel.setRowCount(0);
         for (TeacherNoticeRecord record : noticeRecords) {
             noticeTableModel.addRow(new Object[]{record.date, record.text});
+        }
+    }
+
+    private void reloadStudentDirectoryTable() {
+        if (studentDirectoryTableModel == null) {
+            return;
+        }
+        studentDirectoryTableModel.setRowCount(0);
+        for (TeacherStudentRecord record : studentRecords) {
+            studentDirectoryTableModel.addRow(new Object[]{
+                    record.id,
+                    record.name,
+                    record.className,
+                    record.attendancePercentage,
+                    record.assignmentMarks,
+                    record.examMarks
+            });
+        }
+    }
+
+    private void reloadStudentSubmissionTable() {
+        if (studentSubmissionTableModel == null) {
+            return;
+        }
+        studentSubmissionTableModel.setRowCount(0);
+        for (TeacherSubmissionReviewRecord review : reviewRecords) {
+            studentSubmissionTableModel.addRow(new Object[]{
+                    review.studentPrn,
+                    review.studentName,
+                    review.title,
+                    review.type,
+                    review.status,
+                    formatDate(review.createdAt)
+            });
         }
     }
 
